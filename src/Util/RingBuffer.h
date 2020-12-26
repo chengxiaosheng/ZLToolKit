@@ -33,7 +33,7 @@ public:
     typedef std::shared_ptr<RingDelegate> Ptr;
     RingDelegate() {}
     virtual ~RingDelegate() {}
-    virtual void onWrite(const T &in, bool is_key = true) = 0;
+    virtual void onWrite(T in, bool is_key = true) = 0;
 };
 
 template<typename T>
@@ -126,7 +126,7 @@ public:
      * @param is_key 是否为关键帧
      * @return 是否触发重置环形缓存大小
      */
-    inline void write(const T &in, bool is_key = true) {
+     void write(T in, bool is_key = true) {
         if (is_key) {
             //遇到I帧，那么移除老数据
             _data_cache.clear();
@@ -151,8 +151,15 @@ public:
     const deque<pair<bool, T> > &getCache() const {
         return _data_cache;
     }
+
+    void clearCache(){
+        _data_cache.clear();
+        _size = 0;
+    }
+
 private:
     _RingStorage() = default;
+
 private:
     deque<pair<bool, T> > _data_cache;
     int _max_size;
@@ -193,7 +200,7 @@ private:
         _on_size_changed = onSizeChanged;
     }
 
-    void write(const T &in, bool is_key = true) {
+    void write(T in, bool is_key = true) {
         for (auto it = _reader_map.begin(); it != _reader_map.end();) {
             auto reader = it->second.lock();
             if (!reader) {
@@ -205,7 +212,7 @@ private:
             reader->onRead(in, is_key);
             ++it;
         }
-        _storage->write(in, is_key);
+        _storage->write(std::move(in), is_key);
     }
 
     std::shared_ptr<RingReader> attach(const EventPoller::Ptr &poller, bool use_cache) {
@@ -232,12 +239,14 @@ private:
         return reader;
     }
 
-    int readerCount() {
-        return _reader_size;
-    }
-
     void onSizeChanged(bool add_flag) {
         _on_size_changed(_reader_size, add_flag);
+    }
+
+    void clearCache(){
+        if(_reader_size  == 0){
+            _storage->clearCache();
+        }
     }
 
 private:
@@ -254,7 +263,7 @@ public:
     typedef _RingReader<T> RingReader;
     typedef _RingStorage<T> RingStorage;
     typedef _RingReaderDispatcher<T> RingReaderDispatcher;
-    typedef function<void(const EventPoller::Ptr &poller, int size, bool add_flag)> onReaderChanged;
+    typedef function<void(int size)> onReaderChanged;
 
     RingBuffer(int max_size = 1024, const onReaderChanged &cb = nullptr) {
         _on_reader_changed = cb;
@@ -263,20 +272,21 @@ public:
 
     ~RingBuffer() {}
 
-    void write(const T &in, bool is_key = true) {
+    void write(T in, bool is_key = true) {
         if (_delegate) {
-            _delegate->onWrite(in, is_key);
+            _delegate->onWrite(std::move(in), is_key);
             return;
         }
 
         LOCK_GUARD(_mtx_map);
-        _storage->write(in, is_key);
         for (auto &pr : _dispatcher_map) {
             auto &second = pr.second;
+            //切换线程后触发onRead事件
             pr.first->async([second, in, is_key]() {
-                second->write(in, is_key);
+                second->write(std::move(const_cast<T &>(in)), is_key);
             }, false);
         }
+        _storage->write(std::move(in), is_key);
     }
 
     void setDelegate(const typename RingDelegate<T>::Ptr &delegate) {
@@ -312,12 +322,19 @@ public:
     }
 
     int readerCount() {
+        return _total_count;
+    }
+
+    void clearCache(){
         LOCK_GUARD(_mtx_map);
-        int total = 0;
+        _storage->clearCache();
         for (auto &pr : _dispatcher_map) {
-            total += pr.second->readerCount();
+            auto &second = pr.second;
+            //切换线程后清空缓存
+            pr.first->async([second]() {
+                second->clearCache();
+            }, false);
         }
-        return total;
     }
 
 private:
@@ -327,8 +344,14 @@ private:
             _dispatcher_map.erase(poller);
         }
 
+        if (add_flag) {
+            ++_total_count;
+        } else {
+            --_total_count;
+        }
+
         if (_on_reader_changed) {
-            _on_reader_changed(poller, size, add_flag);
+            _on_reader_changed(_total_count);
         }
     }
 
@@ -341,6 +364,7 @@ private:
 
 private:
     mutex _mtx_map;
+    atomic_int _total_count {0};
     typename RingStorage::Ptr _storage;
     typename RingDelegate<T>::Ptr _delegate;
     onReaderChanged _on_reader_changed;

@@ -174,12 +174,12 @@ std::string &strToUpper(std::string &str) {
 // string转小写
 std::string strToLower(std::string &&str) {
     transform(str.begin(), str.end(), str.begin(), towlower);
-    return std::move(str);
+    return str;
 }
 // string转大写
 std::string strToUpper(std::string &&str) {
     transform(str.begin(), str.end(), str.begin(), towupper);
-    return std::move(str);
+    return str;
 }
 
 vector<string> split(const string& s, const char *delim) {
@@ -230,6 +230,15 @@ void replace(string &str, const string &old_str, const string &new_str) {
     replace(str, old_str, new_str);
 }
 
+bool start_with(const string &str, const string &substr) {
+    return str.find(substr) == 0;
+}
+
+bool end_with(const string &str, const string &substr) {
+    auto pos = str.rfind(substr);
+    return pos != string::npos && pos == str.size() - substr.size();
+}
+
 bool isIP(const char *str){
     return INADDR_NONE != inet_addr(str);
 }
@@ -247,6 +256,18 @@ int gettimeofday(struct timeval *tp, void *tzp) {
     tp->tv_sec = now_stamp / 1000000LL;
     tp->tv_usec = now_stamp % 1000000LL;
     return 0;
+}
+
+const char *strcasestr(const char *big, const char *little){
+    string big_str = big;
+    string little_str = little;
+    strToLower(big_str);
+    strToLower(little_str);
+    auto pos = strstr(big_str.data(), little_str.data());
+    if (!pos){
+        return nullptr;
+    }
+    return big + (pos - big_str.data());
 }
 
 #include <stdio.h>
