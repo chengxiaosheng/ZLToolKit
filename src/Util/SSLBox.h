@@ -14,18 +14,25 @@
 #include <mutex>
 #include <string>
 #include <functional>
+#include <unordered_map>
 #include "logger.h"
 #include "List.h"
 #include "util.h"
 #include "Network/Buffer.h"
 #include "ResourcePool.h"
 #include "toolkit/exports.h"
+#include "SSLUtil.h"
 
 typedef struct x509_st X509;
 typedef struct evp_pkey_st EVP_PKEY;
 typedef struct ssl_ctx_st SSL_CTX;
 typedef struct ssl_st SSL;
 typedef struct bio_st BIO;
+
+namespace trantor {
+struct TLSPolicy;
+using TLSPolicyPtr = std::shared_ptr<TLSPolicy>;
+} // namespace trantor
 
 namespace toolkit {
 
@@ -196,82 +203,75 @@ private:
 
 class ZLTOOLKIT_EXPORT SSL_Box {
 public:
+    /**
+     * 使用 SSL_Initor 全局上下文创建 SSL_Box (向后兼容)
+     * @param server_mode true=服务器模式, false=客户端模式
+     * @param enable 是否启用SSL
+     * @param buff_size 缓冲区大小
+     */
     SSL_Box(bool server_mode = true, bool enable = true, int buff_size = 32 * 1024);
+
+    /**
+     * 使用自定义 SSL_CTX 创建 SSL_Box
+     * @param ctx SSL 上下文 (shared_ptr 管理生命周期)
+     * @param server_mode true=服务器模式, false=客户端模式
+     * @param buff_size 缓冲区大小
+     */
+    SSL_Box(std::shared_ptr<SSL_CTX> ctx, bool server_mode, int buff_size = 32 * 1024);
 
     ~SSL_Box();
 
     /**
      * 收到密文后，调用此函数解密
      * @param buffer 收到的密文数据
-     * Decrypts the received ciphertext after calling this function
-     * @param buffer Received ciphertext data
-     
-     * [AUTO-TRANSLATED:7e8b1fc6]
      */
     void onRecv(const Buffer::Ptr &buffer);
 
     /**
      * 需要加密明文调用此函数
      * @param buffer 需要加密的明文数据
-     * Calls this function to encrypt the plaintext that needs to be encrypted
-     * @param buffer Plaintext data that needs to be encrypted
-     
-     * [AUTO-TRANSLATED:9d386695]
      */
     void onSend(Buffer::Ptr buffer);
 
     /**
      * 设置解密后获取明文的回调
      * @param cb 回调对象
-     * Sets the callback to get the plaintext after decryption
-     * @param cb Callback object
-     
-     * [AUTO-TRANSLATED:897359bc]
      */
     void setOnDecData(const std::function<void(const Buffer::Ptr &)> &cb);
 
     /**
      * 设置加密后获取密文的回调
      * @param cb 回调对象
-     * Sets the callback to get the ciphertext after encryption
-     * @param cb Callback object
-     
-     * [AUTO-TRANSLATED:bb31b34b]
      */
     void setOnEncData(const std::function<void(const Buffer::Ptr &)> &cb);
 
     /**
      * 终结ssl
-     * Terminates SSL
-     
-     * [AUTO-TRANSLATED:2ab06469]
      */
     void shutdown();
 
     /**
      * 清空数据
-     * Clears data
-     
-     * [AUTO-TRANSLATED:62d4f400]
      */
     void flush();
 
     /**
-     * 设置虚拟主机名
+     * 设置虚拟主机名 (SNI)
      * @param host 虚拟主机名
      * @return 是否成功
-     * Sets the virtual host name
-     * @param host Virtual host name
-     * @return Whether the operation was successful
-     
-     * [AUTO-TRANSLATED:eebc1e2f]
      */
     bool setHost(const char *host);
 
+    /**
+     * 是否使用自定义 SSL_CTX
+     */
+    bool hasCustomCtx() const { return (bool)_custom_ctx; }
+
 private:
     void flushWriteBio();
-
     void flushReadBio();
+    // 使用自定义上下文初始化 SSL
+    void initFromCustomCtx();
 
 private:
     bool _server_mode;
@@ -280,12 +280,136 @@ private:
     int _buff_size;
     BIO *_read_bio;
     BIO *_write_bio;
+    std::shared_ptr<SSL_CTX> _custom_ctx;  // 自定义 SSL 上下文
     std::shared_ptr<SSL> _ssl;
     List <Buffer::Ptr> _buffer_send;
     ResourcePool <BufferRaw> _buffer_pool;
     std::function<void(const Buffer::Ptr &)> _on_dec;
     std::function<void(const Buffer::Ptr &)> _on_enc;
 };
+
+/**
+ * TLS会话工厂 - 管理按监听器/按目标的TLS策略
+ * 单例模式，线程安全
+ */
+class ZLTOOLKIT_EXPORT TLSSessionFactory {
+public:
+    static TLSSessionFactory &Instance();
+
+    // ===================== 服务器端 API =====================
+
+    /**
+     * 注册服务器策略
+     * @param listenAddr 监听地址 (如 "0.0.0.0")
+     * @param port 监听端口
+     * @param policy TLS策略
+     */
+    void registerServerPolicy(
+        const std::string &listenAddr,
+        uint16_t port,
+        trantor::TLSPolicyPtr policy);
+
+    /**
+     * 获取服务器策略
+     */
+    trantor::TLSPolicyPtr getServerPolicy(
+        const std::string &listenAddr,
+        uint16_t port) const;
+
+    /**
+     * 获取/创建服务器 SSL 上下文
+     */
+    std::shared_ptr<SSL_CTX> getServerSSLContext(
+        const std::string &listenAddr,
+        uint16_t port);
+
+    // ===================== 客户端 API =====================
+
+    /**
+     * 注册客户端策略 (host:port)
+     * @param targetHost 目标主机/域名
+     * @param port 目标端口
+     * @param policy TLS策略
+     */
+    void registerClientPolicy(
+        const std::string &targetHost,
+        uint16_t port,
+        trantor::TLSPolicyPtr policy);
+
+    /**
+     * 注册客户端策略 (host:port:protocol)
+     * 用于同一host:port但不同协议需要不同证书的场景
+     * @param targetHost 目标主机/域名
+     * @param port 目标端口
+     * @param protocol 协议标识 (如 "http", "mqtt", "grpc" 等)
+     * @param policy TLS策略
+     */
+    void registerClientPolicy(
+        const std::string &targetHost,
+        uint16_t port,
+        const std::string &protocol,
+        trantor::TLSPolicyPtr policy);
+
+    /**
+     * 获取客户端策略
+     */
+    trantor::TLSPolicyPtr getClientPolicy(
+        const std::string &targetHost,
+        uint16_t port,
+        const std::string &protocol = "") const;
+
+    /**
+     * 获取/创建客户端 SSL 上下文
+     */
+    std::shared_ptr<SSL_CTX> getClientSSLContext(
+        const std::string &targetHost,
+        uint16_t port,
+        const std::string &protocol = "");
+
+    // ===================== SSL_Box 工厂方法 =====================
+
+    /**
+     * 创建服务器端 SSL_Box
+     */
+    std::shared_ptr<SSL_Box> createServerSSLBox(
+        const std::string &listenAddr,
+        uint16_t port,
+        int buff_size = 32 * 1024);
+
+    /**
+     * 创建客户端 SSL_Box
+     */
+    std::shared_ptr<SSL_Box> createClientSSLBox(
+        const std::string &targetHost,
+        uint16_t port,
+        const std::string &protocol = "",
+        int buff_size = 32 * 1024);
+
+    /**
+     * 清除所有策略 (主要用于测试)
+     */
+    void clear();
+
+private:
+    TLSSessionFactory() = default;
+
+    mutable std::mutex _mutex;
+
+    // 服务器策略: "addr:port" -> policy/context
+    std::unordered_map<std::string, trantor::TLSPolicyPtr> _serverPolicies;
+    std::unordered_map<std::string, std::shared_ptr<SSL_CTX>> _serverContexts;
+
+    // 客户端策略: "host:port[:protocol]" -> policy/context
+    std::unordered_map<std::string, trantor::TLSPolicyPtr> _clientPolicies;
+    std::unordered_map<std::string, std::shared_ptr<SSL_CTX>> _clientContexts;
+
+    // 生成 key
+    static std::string makeServerKey(const std::string &addr, uint16_t port);
+    static std::string makeClientKey(const std::string &host, uint16_t port, const std::string &protocol);
+};
+
+
+
 
 } /* namespace toolkit */
 #endif /* CRYPTO_SSLBOX_H_ */

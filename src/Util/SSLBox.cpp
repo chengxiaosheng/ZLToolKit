@@ -11,6 +11,7 @@
 #include "SSLBox.h"
 #include "onceToken.h"
 #include "SSLUtil.h"
+#include "trantor/net/TLSPolicy.h"
 
 #if defined(ENABLE_OPENSSL)
 #include <openssl/ssl.h>
@@ -322,10 +323,10 @@ string SSL_Initor::defaultVhost(bool server_mode) {
 
 SSL_Box::~SSL_Box() {}
 
-SSL_Box::SSL_Box(bool server_mode, bool enable, int buff_size) {
+SSL_Box::SSL_Box(bool server_mode, bool enable, int buff_size)
+    : _server_mode(server_mode), _send_handshake(false), _buff_size(buff_size) {
 #if defined(ENABLE_OPENSSL)
     _read_bio = BIO_new(BIO_s_mem());
-    _server_mode = server_mode;
     if (enable) {
         _ssl = SSL_Initor::Instance().makeSSL(server_mode);
     }
@@ -336,8 +337,41 @@ SSL_Box::SSL_Box(bool server_mode, bool enable, int buff_size) {
     } else {
         WarnL << "makeSSL failed";
     }
-    _send_handshake = false;
-    _buff_size = buff_size;
+#endif //defined(ENABLE_OPENSSL)
+}
+
+SSL_Box::SSL_Box(std::shared_ptr<SSL_CTX> ctx, bool server_mode, int buff_size)
+    : _server_mode(server_mode), _send_handshake(false), _buff_size(buff_size), _custom_ctx(std::move(ctx)) {
+#if defined(ENABLE_OPENSSL)
+    _read_bio = BIO_new(BIO_s_mem());
+    if (_custom_ctx) {
+        initFromCustomCtx();
+    } else {
+        // 回退到全局方式
+        _ssl = SSL_Initor::Instance().makeSSL(server_mode);
+        if (_ssl) {
+            _write_bio = BIO_new(BIO_s_mem());
+            SSL_set_bio(_ssl.get(), _read_bio, _write_bio);
+            _server_mode ? SSL_set_accept_state(_ssl.get()) : SSL_set_connect_state(_ssl.get());
+        }
+    }
+    if (!_ssl) {
+        WarnL << "makeSSL failed";
+    }
+#endif //defined(ENABLE_OPENSSL)
+}
+
+void SSL_Box::initFromCustomCtx() {
+#if defined(ENABLE_OPENSSL)
+    if (!_custom_ctx) {
+        return;
+    }
+    _ssl = SSLUtil::makeSSL(_custom_ctx.get());
+    if (_ssl) {
+        _write_bio = BIO_new(BIO_s_mem());
+        SSL_set_bio(_ssl.get(), _read_bio, _write_bio);
+        _server_mode ? SSL_set_accept_state(_ssl.get()) : SSL_set_connect_state(_ssl.get());
+    }
 #endif //defined(ENABLE_OPENSSL)
 }
 
@@ -545,6 +579,161 @@ bool SSL_Box::setHost(const char *host) {
 #else
     return false;
 #endif//SSL_ENABLE_SNI
+}
+
+// ==================== TLSSessionFactory implementation ====================
+
+TLSSessionFactory &TLSSessionFactory::Instance() {
+    static TLSSessionFactory instance;
+    return instance;
+}
+
+std::string TLSSessionFactory::makeServerKey(const std::string &addr, uint16_t port) {
+    return addr + ":" + std::to_string(port);
+}
+
+std::string TLSSessionFactory::makeClientKey(const std::string &host, uint16_t port, const std::string &protocol) {
+    if (protocol.empty()) {
+        return host + ":" + std::to_string(port);
+    }
+    return host + ":" + std::to_string(port) + ":" + protocol;
+}
+
+void TLSSessionFactory::registerServerPolicy(
+    const std::string &listenAddr,
+    uint16_t port,
+    trantor::TLSPolicyPtr policy) {
+    std::lock_guard<std::mutex> lock(_mutex);
+    auto key = makeServerKey(listenAddr, port);
+    _serverPolicies[key] = std::move(policy);
+    _serverContexts.erase(key);  // Clear cached context if any
+}
+
+trantor::TLSPolicyPtr TLSSessionFactory::getServerPolicy(
+    const std::string &listenAddr,
+    uint16_t port) const {
+    std::lock_guard<std::mutex> lock(_mutex);
+    auto key = makeServerKey(listenAddr, port);
+    auto it = _serverPolicies.find(key);
+    if (it != _serverPolicies.end()) {
+        return it->second;
+    }
+    return nullptr;
+}
+
+std::shared_ptr<SSL_CTX> TLSSessionFactory::getServerSSLContext(
+    const std::string &listenAddr,
+    uint16_t port) {
+    std::lock_guard<std::mutex> lock(_mutex);
+    auto key = makeServerKey(listenAddr, port);
+
+    // Check if context already exists
+    auto ctxIt = _serverContexts.find(key);
+    if (ctxIt != _serverContexts.end()) {
+        return ctxIt->second;
+    }
+
+    // Check if policy exists
+    auto policyIt = _serverPolicies.find(key);
+    if (policyIt == _serverPolicies.end()) {
+        return nullptr;
+    }
+
+    // Create context from policy
+    auto ctx = SSLUtil::makeSSLContext(policyIt->second, true);
+    if (ctx) {
+        _serverContexts[key] = ctx;
+    }
+    return ctx;
+}
+
+void TLSSessionFactory::registerClientPolicy(
+    const std::string &targetHost,
+    uint16_t port,
+    trantor::TLSPolicyPtr policy) {
+    registerClientPolicy(targetHost, port, "", std::move(policy));
+}
+
+void TLSSessionFactory::registerClientPolicy(
+    const std::string &targetHost,
+    uint16_t port,
+    const std::string &protocol,
+    trantor::TLSPolicyPtr policy) {
+    std::lock_guard<std::mutex> lock(_mutex);
+    auto key = makeClientKey(targetHost, port, protocol);
+    _clientPolicies[key] = std::move(policy);
+    _clientContexts.erase(key);  // Clear cached context if any
+}
+
+trantor::TLSPolicyPtr TLSSessionFactory::getClientPolicy(
+    const std::string &targetHost,
+    uint16_t port,
+    const std::string &protocol) const {
+    std::lock_guard<std::mutex> lock(_mutex);
+    auto key = makeClientKey(targetHost, port, protocol);
+    auto it = _clientPolicies.find(key);
+    if (it != _clientPolicies.end()) {
+        return it->second;
+    }
+    return nullptr;
+}
+
+std::shared_ptr<SSL_CTX> TLSSessionFactory::getClientSSLContext(
+    const std::string &targetHost,
+    uint16_t port,
+    const std::string &protocol) {
+    std::lock_guard<std::mutex> lock(_mutex);
+    auto key = makeClientKey(targetHost, port, protocol);
+
+    // Check if context already exists
+    auto ctxIt = _clientContexts.find(key);
+    if (ctxIt != _clientContexts.end()) {
+        return ctxIt->second;
+    }
+
+    // Check if policy exists
+    auto policyIt = _clientPolicies.find(key);
+    if (policyIt == _clientPolicies.end()) {
+        return nullptr;
+    }
+
+    // Create context from policy
+    auto ctx = SSLUtil::makeSSLContext(policyIt->second, false);
+    if (ctx) {
+        _clientContexts[key] = ctx;
+    }
+    return ctx;
+}
+
+std::shared_ptr<SSL_Box> TLSSessionFactory::createServerSSLBox(
+    const std::string &listenAddr,
+    uint16_t port,
+    int buff_size) {
+    auto ctx = getServerSSLContext(listenAddr, port);
+    if (ctx) {
+        return std::make_shared<SSL_Box>(ctx, true, buff_size);
+    }
+    return nullptr;
+}
+
+std::shared_ptr<SSL_Box> TLSSessionFactory::createClientSSLBox(
+    const std::string &targetHost,
+    uint16_t port,
+    const std::string &protocol,
+    int buff_size) {
+    auto ctx = getClientSSLContext(targetHost, port, protocol);
+    if (ctx) {
+        return std::make_shared<SSL_Box>(ctx, false, buff_size);
+    }
+    return nullptr;
+}
+
+void TLSSessionFactory::clear() {
+    std::lock_guard<std::mutex> lock(_mutex);
+    _serverPolicies.clear();
+    _serverContexts.clear();
+    _clientPolicies.clear();
+    _clientContexts.clear();
 }
 
 } /* namespace toolkit */

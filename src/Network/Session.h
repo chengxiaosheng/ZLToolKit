@@ -93,6 +93,84 @@ private:
     SSL_Box _ssl_box;
 };
 
+
+/**
+ * 支持按监听器TLS策略的Session包装器
+ * 使用 TLSSessionFactory 根据本地地址+端口获取 SSL_CTX
+ */
+template <typename SessionType>
+class SessionWithTLSPolicy : public SessionType {
+public:
+    template <typename... ArgsType>
+    SessionWithTLSPolicy(ArgsType &&...args)
+        : SessionType(std::forward<ArgsType>(args)...) {
+
+        // 根据本地地址和端口获取SSL策略上下文
+        auto localAddr = SessionType::get_local_ip();
+        auto localPort = SessionType::get_local_port();
+
+        // 创建 SSL_Box (优先使用按监听器注册的策略)
+        _ssl_box = TLSSessionFactory::Instance().createServerSSLBox(
+            localAddr,
+            localPort
+        );
+
+        if (!_ssl_box) {
+            // 回退: 没有找到自定义策略，使用原有全局方式
+            _ssl_box = std::make_shared<SSL_Box>(true);
+        }
+
+        // 设置加密/解密回调
+        setupCallbacks();
+    }
+
+    ~SessionWithTLSPolicy() override {
+        if (_ssl_box) {
+            _ssl_box->flush();
+        }
+    }
+
+    void onRecv(const Buffer::Ptr &buf) override {
+        if (_ssl_box) {
+            _ssl_box->onRecv(buf);
+        } else {
+            SessionType::onRecv(buf);
+        }
+    }
+
+    bool overSsl() const override { return true; }
+
+    // 供lambda访问protected方法
+    inline void public_onRecv(const Buffer::Ptr &buf) {
+        SessionType::onRecv(buf);
+    }
+    inline void public_send(const Buffer::Ptr &buf) {
+        SessionType::send(buf);
+    }
+
+protected:
+    ssize_t send(Buffer::Ptr buf) override {
+        if (_ssl_box) {
+            auto size = buf->size();
+            _ssl_box->onSend(std::move(buf));
+            return size;
+        }
+        return SessionType::send(std::move(buf));
+    }
+
+private:
+    void setupCallbacks() {
+        _ssl_box->setOnEncData([this](const Buffer::Ptr &buf) {
+            public_send(buf);
+        });
+        _ssl_box->setOnDecData([this](const Buffer::Ptr &buf) {
+            public_onRecv(buf);
+        });
+    }
+
+    std::shared_ptr<SSL_Box> _ssl_box;
+};
+
 // 通过该模板可以让UDP服务器快速支持KCP
 template <typename SessionType>
 class SessionWithKCP : public SessionType {

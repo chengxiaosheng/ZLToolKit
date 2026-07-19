@@ -22,6 +22,11 @@ typedef struct ssl_ctx_st SSL_CTX;
 typedef struct ssl_st SSL;
 typedef struct bio_st BIO;
 
+namespace trantor {
+struct TLSPolicy;
+using TLSPolicyPtr = std::shared_ptr<TLSPolicy>;
+} // namespace trantor
+
 namespace toolkit {
 /**
  * ssl证书后缀一般分为以下几种
@@ -78,15 +83,24 @@ public:
      * @param key 私钥
      * @param serverMode 是否为服务器模式或客户端模式
      * @return SSL_CTX对象
-     * Create SSL_CTX object
-     * @param cer Public key array
-     * @param key Private key
-     * @param serverMode Whether it is server mode or client mode
-     * @return SSL_CTX object
-     
-     * [AUTO-TRANSLATED:d0faa6a4]
      */
     static std::shared_ptr<SSL_CTX> makeSSLContext(const std::vector<std::shared_ptr<X509> > &cers, const std::shared_ptr<EVP_PKEY> &key, bool serverMode = true, bool checkKey = false);
+
+    /**
+     * 从 TLSPolicy 创建 SSL_CTX
+     * @param policy TLS策略配置
+     * @param serverMode 是否为服务器模式
+     * @return SSL_CTX 对象
+     */
+    static std::shared_ptr<SSL_CTX> makeSSLContext(const trantor::TLSPolicy &policy, bool serverMode);
+
+    /**
+     * 从 TLSPolicyPtr 创建 SSL_CTX
+     * @param policy TLS策略配置智能指针
+     * @param serverMode 是否为服务器模式
+     * @return SSL_CTX 对象
+     */
+    static std::shared_ptr<SSL_CTX> makeSSLContext(const trantor::TLSPolicyPtr &policy, bool serverMode);
 
     /**
      * 创建ssl对象

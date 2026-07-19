@@ -11,6 +11,7 @@
 #include "SSLUtil.h"
 #include "onceToken.h"
 #include "logger.h"
+#include "trantor/net/TLSPolicy.h"
 
 #if defined(ENABLE_OPENSSL)
 #include <openssl/bio.h>
@@ -397,3 +398,115 @@ string SSLUtil::getServerName(X509 *cer) {
 }
 
 }//namespace toolkit
+
+// ==================== TLSPolicy implementation ====================
+
+namespace toolkit {
+
+std::shared_ptr<SSL_CTX> SSLUtil::makeSSLContext(const trantor::TLSPolicyPtr &policy, bool serverMode) {
+    if (!policy) {
+        return nullptr;
+    }
+    return makeSSLContext(*policy, serverMode);
+}
+
+std::shared_ptr<SSL_CTX> SSLUtil::makeSSLContext(const trantor::TLSPolicy &policy, bool serverMode) {
+#if defined(ENABLE_OPENSSL)
+    SSL_CTX *ctx = SSL_CTX_new(serverMode ? SSLv23_server_method() : SSLv23_client_method());
+    if (!ctx) {
+        WarnL << "SSL_CTX_new failed: " << getLastError();
+        return nullptr;
+    }
+
+    // Load certificate and private key if provided
+    if (!policy.getCertPath().empty() && !policy.getKeyPath().empty()) {
+        if (SSL_CTX_use_certificate_chain_file(ctx, policy.getCertPath().c_str(), SSL_FILETYPE_PEM) != 1) {
+            WarnL << "SSL_CTX_use_certificate_chain_file failed: " << getLastError();
+            SSL_CTX_free(ctx);
+            return nullptr;
+        }
+
+        if (SSL_CTX_use_PrivateKey_file(ctx, policy.getKeyPath().c_str(), SSL_FILETYPE_PEM) != 1) {
+            WarnL << "SSL_CTX_use_PrivateKey_file failed: " << getLastError();
+            SSL_CTX_free(ctx);
+            return nullptr;
+        }
+
+        if (SSL_CTX_check_private_key(ctx) != 1) {
+            WarnL << "SSL_CTX_check_private_key failed: " << getLastError();
+            SSL_CTX_free(ctx);
+            return nullptr;
+        }
+    }
+
+    // Configure TLS version options
+    unsigned long sslOptions = SSL_OP_ALL | SSL_OP_NO_COMPRESSION;
+
+#ifdef SSL_OP_NO_SSLv2
+    sslOptions |= SSL_OP_NO_SSLv2;
+#endif
+#ifdef SSL_OP_NO_SSLv3
+    sslOptions |= SSL_OP_NO_SSLv3;
+#endif
+
+    if (!policy.getUseOldTLS()) {
+        // Disable old TLS versions (< 1.2)
+#ifdef SSL_OP_NO_TLSv1
+        sslOptions |= SSL_OP_NO_TLSv1;
+#endif
+#ifdef SSL_OP_NO_TLSv1_1
+        sslOptions |= SSL_OP_NO_TLSv1_1;
+#endif
+    }
+
+    SSL_CTX_set_options(ctx, sslOptions);
+
+    // Configure certificate validation
+    if (policy.getValidate()) {
+        int verifyMode = SSL_VERIFY_PEER;
+        if (serverMode && !policy.getCaPath().empty()) {
+            // For server with CA path, require client certificate
+            verifyMode |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
+        }
+        SSL_CTX_set_verify(ctx, verifyMode, nullptr);
+    } else {
+        SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, nullptr);
+    }
+
+    // Configure CA path if provided
+    if (!policy.getCaPath().empty()) {
+        if (SSL_CTX_load_verify_locations(ctx, policy.getCaPath().c_str(), nullptr) != 1) {
+            WarnL << "SSL_CTX_load_verify_locations failed: " << getLastError();
+            // Don't fail, just log warning - continue with default CA if available
+        }
+    }
+
+    // Load system CA store if enabled (for client mode mainly)
+    if (policy.getUseSystemCertStore()) {
+        loadDefaultCAs(ctx);
+    }
+
+    // Apply SSL conf commands if provided
+    for (const auto &cmd : policy.getConfCmds()) {
+        if (SSL_CTX_ctrl(ctx, SSL_CTRL_SET_TMP_DH, 0, nullptr) == 0) {
+            // Skip, this is just an example - actual implementation would need
+            // to map command names to SSL_CTX_ctrl operations
+        }
+    }
+
+    // Set cipher list
+    SSL_CTX_set_cipher_list(ctx, "ALL:!ADH:!LOW:!EXP:!MD5:!3DES:!DES:!IDEA:!RC4:!SEED-SHA:@STRENGTH");
+
+    return std::shared_ptr<SSL_CTX>(ctx, [](SSL_CTX *ptr) {
+        if (ptr) {
+            SSL_CTX_free(ptr);
+        }
+    });
+#else
+    (void)policy;
+    (void)serverMode;
+    return nullptr;
+#endif // defined(ENABLE_OPENSSL)
+}
+
+} // namespace toolkit

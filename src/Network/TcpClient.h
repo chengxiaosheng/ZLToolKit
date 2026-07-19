@@ -226,5 +226,184 @@ private:
     std::shared_ptr<SSL_Box> _ssl_box;
 };
 
+/**
+ * 支持按目标TLS策略的客户端包装器
+ *
+ * 使用方式:
+ *   1. 自动模式: 先通过 TLSSessionFactory 注册策略,
+ *                 startConnect 时自动根据 host:port 查找
+ *   2. 手动模式: 调用 setTLSPolicy() 或 setSSLBox()
+ *                 在 startConnect 之前传入
+ */
+template <typename TcpClientType>
+class TcpClientWithTLSPolicy : public TcpClientType {
+public:
+    using Ptr = std::shared_ptr<TcpClientWithTLSPolicy>;
+
+    template <typename... ArgsType>
+    TcpClientWithTLSPolicy(ArgsType &&...args)
+        : TcpClientType(std::forward<ArgsType>(args)...) {}
+
+    ~TcpClientWithTLSPolicy() override {
+        if (_ssl_box) {
+            _ssl_box->flush();
+        }
+    }
+
+    // ===================== 新增: 连接前设置策略 =====================
+
+    /**
+     * 手动设置 TLS 策略 (必须在 startConnect 之前调用)
+     * @param policy TLS策略
+     */
+    void setTLSPolicy(trantor::TLSPolicyPtr policy) {
+        _user_policy = std::move(policy);
+    }
+
+    /**
+     * 手动设置 SSL_Box (必须在 startConnect 之前调用)
+     * 适用于需要完全自定义SSL配置的场景
+     * @param ssl_box 自定义的 SSL_Box
+     */
+    void setSSLBox(std::shared_ptr<SSL_Box> ssl_box) {
+        _ssl_box = std::move(ssl_box);
+    }
+
+    /**
+     * 设置协议标识 (用于策略查找: host:port:protocol)
+     * @param protocol 协议标识 (如 "http", "mqtt", "grpc" 等)
+     */
+    void setProtocol(const std::string &protocol) {
+        _protocol = protocol;
+    }
+
+    // ===================== 数据收发 =====================
+
+    void onRecv(const Buffer::Ptr &buf) override {
+        if (_ssl_box) {
+            _ssl_box->onRecv(buf);
+        } else {
+            TcpClientType::onRecv(buf);
+        }
+    }
+
+    // 使能其他未被重写的send函数
+    using TcpClientType::send;
+
+    ssize_t send(Buffer::Ptr buf) override {
+        if (_ssl_box) {
+            auto size = buf->size();
+            _ssl_box->onSend(std::move(buf));
+            return size;
+        }
+        return TcpClientType::send(std::move(buf));
+    }
+
+    // 供lambda访问protected方法
+    inline void public_onRecv(const Buffer::Ptr &buf) {
+        TcpClientType::onRecv(buf);
+    }
+    inline void public_send(const Buffer::Ptr &buf) {
+        TcpClientType::send(buf);
+    }
+
+    // ===================== 连接 =====================
+
+    void startConnect(const std::string &url, uint16_t port,
+                       float timeout_sec = 5, uint16_t local_port = 0) override {
+        _target_host = url;
+        _target_port = port;
+        TcpClientType::startConnect(url, port, timeout_sec, local_port);
+    }
+
+    void startConnectWithProxy(const std::string &url, const std::string &proxy_host, uint16_t proxy_port,
+                                 float timeout_sec = 5, uint16_t local_port = 0) override {
+        _target_host = url;
+        _target_port = proxy_port;
+        TcpClientType::startConnectWithProxy(url, proxy_host, proxy_port, timeout_sec, local_port);
+    }
+
+    bool overSsl() const override { return (bool)_ssl_box; }
+
+protected:
+    void onConnect(const toolkit::SockException &ex) override {
+        if (!ex) {
+            createSSLBox();
+        }
+        TcpClientType::onConnect(ex);
+    }
+
+    /**
+     * 重置 ssl, 主要为了解决一些302跳转时http与https的转换
+     */
+    void setDoNotUseSSL() {
+        _ssl_box.reset();
+        _user_policy.reset();
+    }
+
+private:
+    /**
+     * 根据优先级创建 SSL_Box
+     */
+    void createSSLBox() {
+        // 优先级1: 用户已手动设置 SSL_Box
+        if (_ssl_box) {
+            setupCallbacks();
+            setupSNI();
+            return;
+        }
+
+        // 优先级2: 用户已手动设置策略
+        if (_user_policy) {
+            auto ctx = SSLUtil::makeSSLContext(_user_policy, false);
+            if (ctx) {
+                _ssl_box = std::make_shared<SSL_Box>(ctx, false);
+                setupCallbacks();
+                setupSNI();
+            }
+            return;
+        }
+
+        // 优先级3: 从工厂根据 host:port[:protocol] 查找
+        _ssl_box = TLSSessionFactory::Instance().createClientSSLBox(
+            _target_host,
+            _target_port,
+            _protocol
+        );
+
+        if (_ssl_box) {
+            setupCallbacks();
+            setupSNI();
+            return;
+        }
+
+        // 优先级4: 回退到全局 SSL_Initor 方式
+        _ssl_box = std::make_shared<SSL_Box>(false);
+        setupCallbacks();
+        setupSNI();
+    }
+
+    void setupCallbacks() {
+        _ssl_box->setOnDecData([this](const Buffer::Ptr &buf) {
+            public_onRecv(buf);
+        });
+        _ssl_box->setOnEncData([this](const Buffer::Ptr &buf) {
+            public_send(buf);
+        });
+    }
+
+    void setupSNI() {
+        if (!isIP(_target_host.data())) {
+            _ssl_box->setHost(_target_host.data());
+        }
+    }
+
+    std::string _target_host;
+    uint16_t _target_port = 0;
+    std::string _protocol;
+    trantor::TLSPolicyPtr _user_policy;  // 用户手动设置的策略
+    std::shared_ptr<SSL_Box> _ssl_box;
+};
+
 } /* namespace toolkit */
 #endif /* NETWORK_TCPCLIENT_H */
