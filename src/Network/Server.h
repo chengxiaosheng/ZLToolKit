@@ -14,6 +14,7 @@
 #include <unordered_map>
 #include "Util/mini.h"
 #include "Session.h"
+#include "toolkit/exports.h"
 
 namespace toolkit {
 
@@ -21,7 +22,7 @@ namespace toolkit {
 //Global Session record object, convenient for later management
 // 线程安全的  [AUTO-TRANSLATED:efbca605]
 //Thread-safe
-class SessionMap : public std::enable_shared_from_this<SessionMap> {
+class ZLTOOLKIT_EXPORT SessionMap : public std::enable_shared_from_this<SessionMap> {
 public:
     friend class SessionHelper;
     using Ptr = std::shared_ptr<SessionMap>;
@@ -53,7 +54,7 @@ private:
 
 class Server;
 
-class SessionHelper {
+class ZLTOOLKIT_EXPORT SessionHelper {
 public:
     bool enable = true;
 
@@ -77,7 +78,7 @@ private:
 //Server base class, temporarily only used to decouple SessionHelper from TcpServer
 // 后续将 TCP 与 UDP 服务通用部分加到这里.  [AUTO-TRANSLATED:3d8429f3]
 //Later, the common parts of TCP and UDP services will be added here.
-class Server : public std::enable_shared_from_this<Server>, public mINI {
+class ZLTOOLKIT_EXPORT Server : public std::enable_shared_from_this<Server>, public mINI {
 public:
     using Ptr = std::shared_ptr<Server>;
 

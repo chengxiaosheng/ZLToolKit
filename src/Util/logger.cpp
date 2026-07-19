@@ -301,10 +301,10 @@ void ConsoleChannel::write(const Logger &logger, const LogContextPtr &ctx) {
     static android_LogPriority LogPriorityArr[10];
     static onceToken s_token([](){
         LogPriorityArr[LTrace] = ANDROID_LOG_VERBOSE;
-        LogPriorityArr[LDebug] = ANDROID_LOG_DEBUG;
-        LogPriorityArr[LInfo] = ANDROID_LOG_INFO;
-        LogPriorityArr[LWarn] = ANDROID_LOG_WARN;
-        LogPriorityArr[LError] = ANDROID_LOG_ERROR;
+        LogPriorityArr[LDebug] = ANDROID_DebugL;
+        LogPriorityArr[LInfo] = ANDROID_InfoL;
+        LogPriorityArr[LWarn] = ANDROID_WarnL;
+        LogPriorityArr[LError] = ANDROID_ErrorL;
     });
     __android_log_print(LogPriorityArr[ctx->_level],"JNI","%s %s",ctx->_function.data(),ctx->str().data());
 #else
@@ -325,10 +325,10 @@ void SysLogChannel::write(const Logger &logger, const LogContextPtr &ctx) {
     }
     static int s_syslog_lev[10];
     static onceToken s_token([]() {
-        s_syslog_lev[LTrace] = LOG_DEBUG;
-        s_syslog_lev[LDebug] = LOG_INFO;
+        s_syslog_lev[LTrace] = DebugL;
+        s_syslog_lev[LDebug] = InfoL;
         s_syslog_lev[LInfo] = LOG_NOTICE;
-        s_syslog_lev[LWarn] = LOG_WARNING;
+        s_syslog_lev[LWarn] = WarnLING;
         s_syslog_lev[LError] = LOG_ERR;
     }, nullptr);
 

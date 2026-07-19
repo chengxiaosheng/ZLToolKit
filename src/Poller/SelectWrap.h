@@ -12,10 +12,11 @@
 #define SRC_POLLER_SELECTWRAP_H_
 
 #include "Util/util.h"
+#include "toolkit/exports.h"
 
 namespace toolkit {
 
-class FdSet {
+class ZLTOOLKIT_EXPORT FdSet {
 public:
     FdSet();
     ~FdSet();
@@ -26,7 +27,7 @@ public:
     void *_ptr;
 };
 
-int zl_select(int cnt, FdSet *read, FdSet *write, FdSet *err, struct timeval *tv);
+ZLTOOLKIT_EXPORT int zl_select(int cnt, FdSet *read, FdSet *write, FdSet *err, struct timeval *tv);
 
 } /* namespace toolkit */
 #endif /* SRC_POLLER_SELECTWRAP_H_ */

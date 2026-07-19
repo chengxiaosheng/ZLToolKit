@@ -14,6 +14,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include "toolkit/exports.h"
 
 typedef struct x509_st X509;
 typedef struct evp_pkey_st EVP_PKEY;
@@ -34,7 +35,7 @@ namespace toolkit {
  
  * [AUTO-TRANSLATED:1cae2cfa]
  */
-class SSLUtil {
+class ZLTOOLKIT_EXPORT SSLUtil {
 public:
     static std::string getLastError();
 

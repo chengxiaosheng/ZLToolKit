@@ -20,10 +20,11 @@
 #include <stdexcept>
 #include "util.h"
 #include "function_traits.h"
+#include "toolkit/exports.h"
 
 namespace toolkit {
 
-class EventDispatcher {
+class ZLTOOLKIT_EXPORT EventDispatcher {
 public:
     friend class NoticeCenter;
     using Ptr = std::shared_ptr<EventDispatcher>;
@@ -85,7 +86,7 @@ private:
     MapType _mapListener;
 };
 
-class NoticeCenter : public std::enable_shared_from_this<NoticeCenter> {
+class ZLTOOLKIT_EXPORT NoticeCenter : public std::enable_shared_from_this<NoticeCenter> {
 public:
     using Ptr = std::shared_ptr<NoticeCenter>;
 

@@ -19,10 +19,11 @@
 #include <iostream>
 #include <functional>
 #include "mini.h"
+#include "toolkit/exports.h"
 
 namespace toolkit{
 
-class Option {
+class ZLTOOLKIT_EXPORT Option {
 public:
     using OptionHandler = std::function<bool(const std::shared_ptr<std::ostream> &stream, const std::string &arg)>;
 
@@ -66,7 +67,7 @@ private:
     std::shared_ptr<std::string> _default_value;
 };
 
-class OptionParser {
+class ZLTOOLKIT_EXPORT OptionParser {
 public:
     using OptionCompleted = std::function<void(const std::shared_ptr<std::ostream> &, mINI &)>;
 
@@ -167,7 +168,7 @@ private:
     OptionCompleted _on_completed;
 };
 
-class CMD : public mINI {
+class ZLTOOLKIT_EXPORT CMD : public mINI {
 public:
     virtual ~CMD() = default;
 
@@ -218,7 +219,7 @@ private:
     }
 };
 
-class CMDRegister {
+class ZLTOOLKIT_EXPORT CMDRegister {
 public:
     static CMDRegister &Instance();
 
@@ -324,7 +325,7 @@ private:
 };
 
 //帮助命令(help)，该命令默认已注册
-class CMD_help : public CMD {
+class ZLTOOLKIT_EXPORT CMD_help : public CMD {
 public:
     CMD_help() {
         _parser = std::make_shared<OptionParser>([](const std::shared_ptr<std::ostream> &stream, mINI &) {
@@ -337,10 +338,10 @@ public:
     }
 };
 
-class ExitException : public std::exception {};
+class ZLTOOLKIT_EXPORT ExitException : public std::exception {};
 
 //退出程序命令(exit)，该命令默认已注册
-class CMD_exit : public CMD {
+class ZLTOOLKIT_EXPORT CMD_exit : public CMD {
 public:
     CMD_exit() {
         _parser = std::make_shared<OptionParser>([](const std::shared_ptr<std::ostream> &, mINI &) {
@@ -357,7 +358,7 @@ public:
 #define CMD_quit CMD_exit
 
 //清空屏幕信息命令(clear)，该命令默认已注册
-class CMD_clear : public CMD {
+class ZLTOOLKIT_EXPORT CMD_clear : public CMD {
 public:
     CMD_clear() {
         _parser = std::make_shared<OptionParser>([this](const std::shared_ptr<std::ostream> &stream, mINI &args) {

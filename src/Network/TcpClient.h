@@ -14,12 +14,13 @@
 #include <memory>
 #include "Socket.h"
 #include "Util/SSLBox.h"
+#include "toolkit/exports.h"
 
 namespace toolkit {
 
 //Tcp客户端，Socket对象默认开始互斥锁  [AUTO-TRANSLATED:5cc9a824]
 //Tcp client, Socket object defaults to starting mutex lock
-class TcpClient : public SocketHelper {
+class ZLTOOLKIT_EXPORT TcpClient : public SocketHelper {
 public:
     using Ptr = std::shared_ptr<TcpClient>;
     TcpClient(const EventPoller::Ptr &poller = nullptr);

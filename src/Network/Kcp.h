@@ -19,10 +19,11 @@
 #include "Poller/Timer.h"
 #include "Util/TimeTicker.h"
 #include "Socket.h"
+#include "toolkit/exports.h"
 
 namespace toolkit {
 
-class KcpHeader {
+class ZLTOOLKIT_EXPORT KcpHeader {
 public:
     static const size_t HEADER_SIZE = 24;
 
@@ -69,7 +70,7 @@ public:
     bool storeHeaderToData(char *buf, size_t size);
 };
 
-class KcpPacket : public KcpHeader, public toolkit::BufferRaw {
+class ZLTOOLKIT_EXPORT KcpPacket : public KcpHeader, public toolkit::BufferRaw {
 public:
     using Ptr = std::shared_ptr<KcpPacket>;
 
@@ -121,7 +122,7 @@ private:
 };
 
 //数据包
-class KcpDataPacket : public KcpPacket {
+class ZLTOOLKIT_EXPORT KcpDataPacket : public KcpPacket {
 public:
     KcpDataPacket(uint32_t conv, size_t payloadSize)
     : KcpPacket(conv, KcpHeader::Cmd::CMD_WASK, payloadSize) {
@@ -129,7 +130,7 @@ public:
 };
 
 //ACK包
-class KcpAckPacket : public KcpPacket {
+class ZLTOOLKIT_EXPORT KcpAckPacket : public KcpPacket {
 public:
     KcpAckPacket(uint32_t conv) 
     : KcpPacket(conv, KcpHeader::Cmd::CMD_ACK, 0) {
@@ -137,7 +138,7 @@ public:
 };
 
 //探测窗口大小包
-class KcpProbePacket : public KcpPacket {
+class ZLTOOLKIT_EXPORT KcpProbePacket : public KcpPacket {
 public:
     KcpProbePacket(uint32_t conv)
     : KcpPacket(conv, KcpHeader::Cmd::CMD_WASK, 0) {
@@ -146,7 +147,7 @@ public:
 };
 
 //告知窗口大小包
-class KcpTellPacket : public KcpPacket {
+class ZLTOOLKIT_EXPORT KcpTellPacket : public KcpPacket {
 public:
     KcpTellPacket(uint32_t conv)
     : KcpPacket(conv, KcpHeader::Cmd::CMD_WINS, 0) {
@@ -158,7 +159,7 @@ public:
 //默认,开启流控: setDelayMode(DELAY_MODE_NORMAL); setInterval(10); setFastResend(0); setNoCwnd(false)
 //普通,关闭流控: setDelayMode(DELAY_MODE_NORMAL); setInterval(10); setFastResend(0); setNoCwnd(true)
 //快速,关闭流控: setDelayMode(DELAY_MODE_NO_DELAY); setInterval(10); setFastResend(1); setNoCwnd(true); setRxMinrto(10)
-class KcpTransport : public std::enable_shared_from_this<KcpTransport> {
+class ZLTOOLKIT_EXPORT KcpTransport : public std::enable_shared_from_this<KcpTransport> {
 public:
     using Ptr = std::shared_ptr<KcpTransport>;
 

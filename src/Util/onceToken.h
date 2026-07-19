@@ -13,10 +13,11 @@
 
 #include <functional>
 #include <type_traits>
+#include "toolkit/exports.h"
 
 namespace toolkit {
 
-class onceToken {
+class ZLTOOLKIT_EXPORT onceToken {
 public:
     using task = std::function<void(void)>;
 

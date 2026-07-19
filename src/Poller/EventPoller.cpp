@@ -74,7 +74,7 @@ void EventPoller::addEventPipe() {
     }
 }
 
-EventPoller::EventPoller(std::string name) {
+EventPoller::EventPoller(std::string name, uint32_t index): _index(index) {
 #if defined(HAS_EPOLL) || defined(HAS_KQUEUE)
     _event_fd = create_event();
     if (_event_fd == INVALID_EVENT_FD) {
@@ -361,12 +361,32 @@ thread::id EventPoller::getThreadId() const {
 const std::string& EventPoller::getThreadName() const {
     return _name;
 }
+void EventPoller::runOnQuit(std::function<void()> cb) {
+    auto self  = shared_from_this();
+    async([cb = std::forward<decltype(cb)>(cb), self]() mutable {
+        self->_exit_callbacks.push_back(std::move(cb));
+    });
+}
 
 static thread_local std::weak_ptr<EventPoller> s_current_poller;
 
 // static
 EventPoller::Ptr EventPoller::getCurrentPoller() {
     return s_current_poller.lock();
+}
+
+std::shared_ptr<EventPoller> EventPoller::createMainPoller() {
+    if (auto poller = s_current_poller.lock()) {
+        return poller;
+    }
+    auto poller = std::shared_ptr<EventPoller>(new EventPoller("main-poller"));
+    s_current_poller = poller;
+    return poller;
+}
+void EventPoller::runMainLoop() {
+    if (this->_name != "main-poller") return;
+    runLoop(true, true);
+    _sem_run_started.wait();
 }
 
 void EventPoller::runLoop(bool blocked, bool ref_self) {
@@ -534,6 +554,11 @@ void EventPoller::runLoop(bool blocked, bool ref_self) {
             callback_list.clear();
         }
 #endif //HAS_EPOLL
+        std::vector<std::function<void()>> exit_callbacks;
+        exit_callbacks.swap(_exit_callbacks);
+        for (auto &func : exit_callbacks) {
+            func();
+        }
     } else {
         _loop_thread = new thread(&EventPoller::runLoop, this, true, ref_self);
         _sem_run_started.wait();
@@ -620,6 +645,10 @@ EventPoller::Ptr EventPollerPool::getPoller(bool prefer_current_thread) {
         return poller;
     }
     return static_pointer_cast<EventPoller>(getExecutor());
+}
+
+EventPoller::Ptr EventPollerPool::operator[](size_t index) const noexcept {
+    return std::dynamic_pointer_cast<EventPoller>(_threads[index % this->getExecutorSize()]);
 }
 
 void EventPollerPool::preferCurrentThread(bool flag) {

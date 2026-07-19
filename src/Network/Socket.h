@@ -22,6 +22,7 @@
 #include "Poller/Timer.h"
 #include "Poller/EventPoller.h"
 #include "BufferSock.h"
+#include "toolkit/exports.h"
 
 namespace toolkit {
 
@@ -70,7 +71,7 @@ typedef enum {
 
 //错误信息类  [AUTO-TRANSLATED:5d337296]
 //Error message class
-class SockException : public std::exception {
+class ZLTOOLKIT_EXPORT SockException : public std::exception {
 public:
     SockException(ErrCode code = Err_success, const std::string &msg = "", int custom_code = 0) {
         _msg = msg;
@@ -118,9 +119,9 @@ private:
 
 //std::cout等输出流可以直接输出SockException对象  [AUTO-TRANSLATED:9b0a61e5]
 //std::cout and other output streams can directly output SockException objects
-std::ostream &operator<<(std::ostream &ost, const SockException &err);
+ZLTOOLKIT_EXPORT std::ostream &operator<<(std::ostream &ost, const SockException &err);
 
-class SockNum {
+class ZLTOOLKIT_EXPORT SockNum {
 public:
     using Ptr = std::shared_ptr<SockNum>;
 
@@ -183,7 +184,7 @@ private:
 //Automatically overflow listening and close socket when destructing
 //防止描述符溢出  [AUTO-TRANSLATED:17c2f2f0]
 //Prevent descriptor overflow
-class SockFD : public noncopyable {
+class ZLTOOLKIT_EXPORT SockFD : public noncopyable {
 public:
     using Ptr = std::shared_ptr<SockFD>;
 
@@ -283,7 +284,7 @@ private:
     Mtx _mtx;
 };
 
-class SockInfo {
+class ZLTOOLKIT_EXPORT SockInfo {
 public:
     SockInfo() = default;
     virtual ~SockInfo() = default;
@@ -313,7 +314,7 @@ public:
 
 //异步IO Socket对象，包括tcp客户端、服务器和udp套接字  [AUTO-TRANSLATED:8d4fc5c2]
 //Asynchronous IO Socket object, including TCP client, server, and UDP socket
-class Socket : public std::enable_shared_from_this<Socket>, public noncopyable, public SockInfo {
+class ZLTOOLKIT_EXPORT Socket : public std::enable_shared_from_this<Socket>, public noncopyable, public SockInfo {
 public:
     using Ptr = std::shared_ptr<Socket>;
     //接收数据回调  [AUTO-TRANSLATED:e3b7ff16]
@@ -868,7 +869,7 @@ private:
     struct sockaddr_storage _peer_addr;
 };
 
-class SockSender {
+class ZLTOOLKIT_EXPORT SockSender {
 public:
     SockSender() = default;
     virtual ~SockSender() = default;
@@ -902,7 +903,7 @@ public:
 
 //Socket对象的包装类  [AUTO-TRANSLATED:9d384814]
 //Socket object wrapper class
-class SocketHelper : public SockSender, public SockInfo, public TaskExecutorInterface, public std::enable_shared_from_this<SocketHelper> {
+class ZLTOOLKIT_EXPORT SocketHelper : public SockSender, public SockInfo, public TaskExecutorInterface, public std::enable_shared_from_this<SocketHelper> {
 public:
     using Ptr = std::shared_ptr<SocketHelper>;
     SocketHelper(const Socket::Ptr &sock);

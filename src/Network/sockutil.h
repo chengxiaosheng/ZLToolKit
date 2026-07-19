@@ -32,6 +32,7 @@
 #include <map>
 #include <vector>
 #include <string>
+#include "toolkit/exports.h"
 
 namespace toolkit {
 
@@ -39,8 +40,8 @@ namespace toolkit {
 #ifndef socklen_t
 #define socklen_t int
 #endif //!socklen_t
-int ioctl(int fd, long cmd, u_long *ptr);
-int close(int fd);
+ZLTOOLKIT_EXPORT int ioctl(int fd, long cmd, u_long *ptr);
+ZLTOOLKIT_EXPORT int close(int fd);
 #endif // defined(_WIN32)
 
 #if !defined(SOCKET_DEFAULT_BUF_SIZE)
@@ -60,7 +61,7 @@ int close(int fd);
 
 //套接字工具类，封装了socket、网络的一些基本操作  [AUTO-TRANSLATED:33a88b27]
 //Socket tool class, encapsulating some basic socket and network operations
-class SockUtil {
+class ZLTOOLKIT_EXPORT SockUtil {
 public:
     struct SockAddrHash {
         std::size_t operator()(const sockaddr_storage& addr) const {

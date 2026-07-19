@@ -19,6 +19,7 @@
 #include <functional>
 #include "Util/util.h"
 #include "Util/ResourcePool.h"
+#include "toolkit/exports.h"
 
 namespace toolkit {
 
@@ -30,7 +31,7 @@ template <typename T> struct is_pointer<const T*> : public std::true_type {};
 
 //缓存基类  [AUTO-TRANSLATED:d130ab72]
 //Cache base class
-class Buffer : public noncopyable {
+class ZLTOOLKIT_EXPORT Buffer : public noncopyable {
 public:
     using Ptr = std::shared_ptr<Buffer>;
 
@@ -112,7 +113,7 @@ using BufferString = BufferOffset<std::string>;
 
 //指针式缓存对象，  [AUTO-TRANSLATED:c8403290]
 //Pointer-style cache object,
-class BufferRaw : public Buffer {
+class ZLTOOLKIT_EXPORT BufferRaw : public Buffer {
 public:
     using Ptr = std::shared_ptr<BufferRaw>;
 
@@ -213,7 +214,7 @@ private:
     ObjectStatistic<BufferRaw> _statistic;
 };
 
-class BufferLikeString : public Buffer {
+class ZLTOOLKIT_EXPORT BufferLikeString : public Buffer {
 public:
     ~BufferLikeString() override = default;
 

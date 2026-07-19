@@ -16,6 +16,7 @@
 #include <functional>
 #include "Util/List.h"
 #include "Util/util.h"
+#include "toolkit/exports.h"
 
 namespace toolkit {
 
@@ -25,7 +26,7 @@ namespace toolkit {
  
  * [AUTO-TRANSLATED:46dad663]
 */
-class ThreadLoadCounter {
+class ZLTOOLKIT_EXPORT ThreadLoadCounter {
 public:
     /**
      * 构造函数
@@ -87,7 +88,7 @@ private:
     List<TimeRecord> _time_list;
 };
 
-class TaskCancelable : public noncopyable {
+class ZLTOOLKIT_EXPORT TaskCancelable : public noncopyable {
 public:
     TaskCancelable() = default;
     virtual ~TaskCancelable() = default;
@@ -155,7 +156,7 @@ protected:
 using TaskIn = std::function<void()>;
 using Task = TaskCancelableImp<void()>;
 
-class TaskExecutorInterface {
+class ZLTOOLKIT_EXPORT TaskExecutorInterface {
 public:
     TaskExecutorInterface() = default;
     virtual ~TaskExecutorInterface() = default;
@@ -219,7 +220,7 @@ public:
  
  * [AUTO-TRANSLATED:630c364f]
 */
-class TaskExecutor : public ThreadLoadCounter, public TaskExecutorInterface {
+class ZLTOOLKIT_EXPORT TaskExecutor : public ThreadLoadCounter, public TaskExecutorInterface {
 public:
     using Ptr = std::shared_ptr<TaskExecutor>;
 
@@ -232,7 +233,7 @@ public:
     ~TaskExecutor() = default;
 };
 
-class TaskExecutorGetter {
+class ZLTOOLKIT_EXPORT TaskExecutorGetter {
 public:
     using Ptr = std::shared_ptr<TaskExecutorGetter>;
 
@@ -256,7 +257,7 @@ public:
     virtual size_t getExecutorSize() const = 0;
 };
 
-class TaskExecutorGetterImp : public TaskExecutorGetter {
+class ZLTOOLKIT_EXPORT TaskExecutorGetterImp : public TaskExecutorGetter {
 public:
     TaskExecutorGetterImp() = default;
     ~TaskExecutorGetterImp() = default;

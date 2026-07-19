@@ -17,10 +17,11 @@
 #endif
 #include "Server.h"
 #include "Session.h"
+#include "toolkit/exports.h"
 
 namespace toolkit {
 
-class UdpServer : public Server {
+class ZLTOOLKIT_EXPORT UdpServer : public Server {
 public:
 #if __cplusplus >= 201703L
     class PeerIdType : public std::array<char, 18> {

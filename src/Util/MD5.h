@@ -37,6 +37,7 @@ documentation and/or software.
 #include <string>
 #include <iostream>
 #include <cstdint>
+#include "toolkit/exports.h"
 
 namespace toolkit {
 
@@ -50,7 +51,7 @@ namespace toolkit {
 //      MD5(std::string).hexdigest()
 //
 // assumes that char is 8 bit and int is 32 bit
-class MD5
+class ZLTOOLKIT_EXPORT MD5
 {
 public:
     typedef unsigned int size_type; // must be 32bit
@@ -91,6 +92,7 @@ private:
     static inline void II(uint4 &a, uint4 b, uint4 c, uint4 d, uint4 x, uint4 s, uint4 ac);
 };
 
+ZLTOOLKIT_EXPORT std::ostream& operator<<(std::ostream&, MD5 md5);
 
 } /* namespace toolkit */
 

@@ -12,10 +12,11 @@
 #define SPEED_STATISTIC_H_
 
 #include "TimeTicker.h"
+#include "toolkit/exports.h"
 
 namespace toolkit {
 
-class BytesSpeed {
+class ZLTOOLKIT_EXPORT BytesSpeed {
 public:
     BytesSpeed() = default;
     ~BytesSpeed() = default;

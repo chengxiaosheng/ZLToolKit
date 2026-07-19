@@ -14,10 +14,11 @@
 #include <functional>
 #include "PipeWrap.h"
 #include "EventPoller.h"
+#include "toolkit/exports.h"
 
 namespace toolkit {
 
-class Pipe {
+class ZLTOOLKIT_EXPORT Pipe {
 public:
     using onRead = std::function<void(int size, const char *buf)>;
 

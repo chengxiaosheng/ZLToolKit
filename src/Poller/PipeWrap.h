@@ -11,9 +11,11 @@
 #ifndef PipeWarp_h
 #define PipeWarp_h
 
+#include "toolkit/exports.h"
+
 namespace toolkit {
 
-class PipeWrap {
+class ZLTOOLKIT_EXPORT PipeWrap {
 public:
     PipeWrap();
     ~PipeWrap();

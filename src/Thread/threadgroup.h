@@ -14,10 +14,11 @@
 #include <stdexcept>
 #include <thread>
 #include <unordered_map>
+#include "toolkit/exports.h"
 
 namespace toolkit {
 
-class thread_group {
+class ZLTOOLKIT_EXPORT thread_group {
 private:
     thread_group(thread_group const &);
     thread_group &operator=(thread_group const &);

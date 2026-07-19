@@ -13,10 +13,11 @@
 
 #include <memory>
 #include "Poller/EventPoller.h"
+#include "toolkit/exports.h"
 
 namespace toolkit {
 
-class WorkThreadPool : public std::enable_shared_from_this<WorkThreadPool>, public TaskExecutorGetterImp {
+class ZLTOOLKIT_EXPORT WorkThreadPool : public std::enable_shared_from_this<WorkThreadPool>, public TaskExecutorGetterImp {
 public:
     using Ptr = std::shared_ptr<WorkThreadPool>;
 
@@ -73,6 +74,8 @@ public:
      * [AUTO-TRANSLATED:1282b772]
      */
     EventPoller::Ptr getPoller();
+
+    EventPoller::Ptr operator[](size_t index) const noexcept;
 
 protected:
     WorkThreadPool();

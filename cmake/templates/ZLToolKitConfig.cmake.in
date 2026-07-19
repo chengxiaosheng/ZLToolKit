@@ -1,0 +1,27 @@
+#[[
+# - Config file for the ZLToolKit package
+# It defines the following variables
+#  ZLToolKit_INCLUDE_DIRS - include directories for ZLToolKit
+#  ZLToolKit_LIBRARIES    - libraries to link against
+#  ZLToolKit_FOUND        - set to TRUE if ZLToolKit is found
+# This module defines the following IMPORTED target:
+# ZLToolKit::ZLToolKit
+#]]
+@PACKAGE_INIT@
+include(CMakeFindDependencyMacro)
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR})
+if(@OpenSSL_FOUND@)
+  find_dependency(OpenSSL)
+endif()
+if(@c-ares_FOUND@)
+  find_dependency(c-ares)
+endif()
+find_dependency(Threads)
+# Load the IMPORTED targets
+get_filename_component(ZLToolKit_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
+if(NOT TARGET ZLToolKit::ZLToolKit)
+  include("${ZLToolKit_CMAKE_DIR}/ZLToolKitTargets.cmake")
+endif()
+# Set variables for backward compatibility
+get_target_property(ZLToolKit_INCLUDE_DIRS ZLToolKit::ZLToolKit INTERFACE_INCLUDE_DIRECTORIES)
+set(ZLToolKit_LIBRARIES ZLToolKit::ZLToolKit)

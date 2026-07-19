@@ -23,6 +23,7 @@
 #define UV_ERRNO_H_
 
 #include <cerrno>
+#include "toolkit/exports.h"
 
 #define UV__EOF     (-4095)
 #define UV__UNKNOWN (-4094)
@@ -511,15 +512,15 @@ typedef enum {
     UV_ERRNO_MAX = UV__EOF - 1
 } uv_errno_t;
 
-const char *uv_err_name(int err);
-const char *uv_strerror(int err);
-int uv_translate_posix_error(int err);
+ZLTOOLKIT_EXPORT const char *uv_err_name(int err);
+ZLTOOLKIT_EXPORT const char *uv_strerror(int err);
+ZLTOOLKIT_EXPORT int uv_translate_posix_error(int err);
 //netErr参数在windows平台下才有效  [AUTO-TRANSLATED:4e619bdb]
 //The netErr parameter is only valid on the Windows platform
-int get_uv_error(bool netErr = true);
+ZLTOOLKIT_EXPORT int get_uv_error(bool netErr = true);
 //netErr参数在windows平台下才有效  [AUTO-TRANSLATED:4e619bdb]
 //The netErr parameter is only valid on the Windows platform
-const char *get_uv_errmsg(bool netErr = true);
+ZLTOOLKIT_EXPORT const char *get_uv_errmsg(bool netErr = true);
 
 }//namespace toolkit
 

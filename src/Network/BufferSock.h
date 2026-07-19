@@ -26,6 +26,7 @@
 #include "Util/ResourcePool.h"
 #include "sockutil.h"
 #include "Buffer.h"
+#include "toolkit/exports.h"
 
 namespace toolkit {
 
@@ -33,7 +34,7 @@ namespace toolkit {
 #define IOV_MAX 1024
 #endif
 
-class BufferSock : public Buffer {
+class ZLTOOLKIT_EXPORT BufferSock : public Buffer {
 public:
     using Ptr = std::shared_ptr<BufferSock>;
     BufferSock(Buffer::Ptr ptr, struct sockaddr *addr = nullptr, int addr_len = 0);
@@ -50,7 +51,7 @@ private:
     Buffer::Ptr _buffer;
 };
 
-class BufferList : public noncopyable {
+class ZLTOOLKIT_EXPORT BufferList : public noncopyable {
 public:
     using Ptr = std::shared_ptr<BufferList>;
     using SendResult = toolkit::function_safe<void(const Buffer::Ptr &buffer, bool send_success)>;
@@ -70,7 +71,7 @@ private:
     ObjectStatistic<BufferList> _statistic;
 };
 
-class SocketRecvBuffer {
+class ZLTOOLKIT_EXPORT SocketRecvBuffer {
 public:
     using Ptr = std::shared_ptr<SocketRecvBuffer>;
 

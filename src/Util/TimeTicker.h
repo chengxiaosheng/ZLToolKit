@@ -13,10 +13,11 @@
 
 #include <cassert>
 #include "logger.h"
+#include "toolkit/exports.h"
 
 namespace toolkit {
 
-class Ticker {
+class ZLTOOLKIT_EXPORT Ticker {
 public:
     /**
      * 此对象可以用于代码执行时间统计，以可以用于一般计时
@@ -86,7 +87,7 @@ private:
     LogContextCapture _ctx;
 };
 
-class SmoothTicker {
+class ZLTOOLKIT_EXPORT SmoothTicker {
 public:
     /**
      * 此对象用于生成平滑的时间戳

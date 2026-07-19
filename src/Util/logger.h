@@ -21,6 +21,7 @@
 #include "util.h"
 #include "List.h"
 #include "Thread/semaphore.h"
+#include "toolkit/exports.h"
 
 namespace toolkit {
 
@@ -35,8 +36,8 @@ typedef enum {
     LTrace = 0, LDebug, LInfo, LWarn, LError
 } LogLevel;
 
-Logger &getLogger();
-void setLogger(Logger *logger);
+ZLTOOLKIT_EXPORT Logger &getLogger();
+ZLTOOLKIT_EXPORT void setLogger(Logger *logger);
 
 /**
 * 日志类
@@ -44,7 +45,7 @@ void setLogger(Logger *logger);
  
  * [AUTO-TRANSLATED:3f74af09]
 */
-class Logger : public std::enable_shared_from_this<Logger>, public noncopyable {
+class ZLTOOLKIT_EXPORT Logger : public std::enable_shared_from_this<Logger>, public noncopyable {
 public:
     friend class AsyncLogWriter;
     using Ptr = std::shared_ptr<Logger>;
@@ -161,7 +162,7 @@ private:
  
  * [AUTO-TRANSLATED:f2805fe8]
 */
-class LogContext : public std::ostringstream {
+class ZLTOOLKIT_EXPORT LogContext : public std::ostringstream {
 public:
     //_file,_function改成string保存，目的是有些情况下，指针可能会失效  [AUTO-TRANSLATED:8e4b3f48]
     //_file,_function changed to string to save, the purpose is that in some cases, the pointer may become invalid
@@ -194,7 +195,7 @@ private:
  
  * [AUTO-TRANSLATED:3c5ddc22]
  */
-class LogContextCapture {
+class ZLTOOLKIT_EXPORT LogContextCapture {
 public:
     using Ptr = std::shared_ptr<LogContextCapture>;
 
@@ -238,7 +239,7 @@ private:
  
  * [AUTO-TRANSLATED:f70397d4]
  */
-class LogWriter : public noncopyable {
+class ZLTOOLKIT_EXPORT LogWriter : public noncopyable {
 public:
     LogWriter() = default;
     virtual ~LogWriter() = default;
@@ -246,7 +247,7 @@ public:
     virtual void write(const LogContextPtr &ctx, Logger &logger) = 0;
 };
 
-class AsyncLogWriter : public LogWriter {
+class ZLTOOLKIT_EXPORT AsyncLogWriter : public LogWriter {
 public:
     AsyncLogWriter();
     ~AsyncLogWriter();
@@ -271,7 +272,7 @@ private:
  
  * [AUTO-TRANSLATED:afbe7d5f]
  */
-class LogChannel : public noncopyable {
+class ZLTOOLKIT_EXPORT LogChannel : public noncopyable {
 public:
     LogChannel(const std::string &name, LogLevel level = LTrace);
     virtual ~LogChannel();
@@ -307,7 +308,7 @@ protected:
  
  * [AUTO-TRANSLATED:ee99643f]
  */
-class EventChannel : public LogChannel {
+class ZLTOOLKIT_EXPORT EventChannel : public LogChannel {
 public:
     //输出日志时的广播名  [AUTO-TRANSLATED:2214541b]
     //Broadcast name when outputting log
@@ -331,7 +332,7 @@ public:
  
  * [AUTO-TRANSLATED:538b78dc]
  */
-class ConsoleChannel : public LogChannel {
+class ZLTOOLKIT_EXPORT ConsoleChannel : public LogChannel {
 public:
     ConsoleChannel(const std::string &name = "ConsoleChannel", LogLevel level = LTrace);
     ~ConsoleChannel() override = default;
@@ -345,7 +346,7 @@ public:
  
  * [AUTO-TRANSLATED:c905542e]
  */
-class FileChannelBase : public LogChannel {
+class ZLTOOLKIT_EXPORT FileChannelBase : public LogChannel {
 public:
     FileChannelBase(const std::string &name = "FileChannelBase", const std::string &path = exePath() + ".log", LogLevel level = LTrace);
     ~FileChannelBase() override;
@@ -374,7 +375,7 @@ class Ticker;
  
  * [AUTO-TRANSLATED:700cb04b]
  */
-class FileChannel : public FileChannelBase {
+class ZLTOOLKIT_EXPORT FileChannel : public FileChannelBase {
 public:
     FileChannel(const std::string &name = "FileChannel", const std::string &dir = exeDir() + "log/", LogLevel level = LTrace);
     ~FileChannel() override = default;
@@ -467,7 +468,7 @@ private:
 };
 
 #if defined(__MACH__) || ((defined(__linux) || defined(__linux__)) && !defined(ANDROID))
-class SysLogChannel : public LogChannel {
+class ZLTOOLKIT_EXPORT SysLogChannel : public LogChannel {
 public:
     SysLogChannel(const std::string &name = "SysLogChannel", LogLevel level = LTrace);
     ~SysLogChannel() override = default;
@@ -477,7 +478,7 @@ public:
 
 #endif//#if defined(__MACH__) || ((defined(__linux) || defined(__linux__)) &&  !defined(ANDROID))
 
-class BaseLogFlagInterface {
+class ZLTOOLKIT_EXPORT BaseLogFlagInterface {
 protected:
     virtual ~BaseLogFlagInterface() {}
     // 获得日志标记Flag  [AUTO-TRANSLATED:a8326285]
@@ -490,7 +491,7 @@ private:
     const char *_log_flag = "";
 };
 
-class LoggerWrapper {
+class ZLTOOLKIT_EXPORT LoggerWrapper {
 public:
     template<typename First, typename ...ARGS>
     static inline void printLogArray(Logger &logger, LogLevel level, const char *file, const char *function, int line, First &&first, ARGS &&...args) {

@@ -21,10 +21,11 @@
 #include "SqlConnection.h"
 #include "Thread/WorkThreadPool.h"
 #include "ResourcePool.h"
+#include "toolkit/exports.h"
 
 namespace toolkit {
 
-class SqlPool : public std::enable_shared_from_this<SqlPool> {
+class ZLTOOLKIT_EXPORT SqlPool : public std::enable_shared_from_this<SqlPool> {
 public:
     using Ptr = std::shared_ptr<SqlPool>;
     using PoolType = ResourcePool<SqlConnection>;
@@ -221,7 +222,7 @@ private:
  
  * [AUTO-TRANSLATED:12f34981]
  */
-class SqlStream {
+class ZLTOOLKIT_EXPORT SqlStream {
 public:
     SqlStream(const char *sql) : _sql(sql) {}
 
@@ -262,7 +263,7 @@ private:
  
  * [AUTO-TRANSLATED:50396624]
  */
-class SqlWriter {
+class ZLTOOLKIT_EXPORT SqlWriter {
 public:
     /**
      * 构造函数

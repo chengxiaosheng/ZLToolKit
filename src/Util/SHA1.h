@@ -20,10 +20,11 @@
 #include <cstdint>
 #include <iostream>
 #include <string>
+#include "toolkit/exports.h"
 
 namespace toolkit {
 
-class SHA1 final
+class ZLTOOLKIT_EXPORT SHA1 final
 {
 public:
     SHA1();

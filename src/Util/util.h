@@ -45,6 +45,8 @@
 #endif
 #endif //__APPLE__
 
+#include "toolkit/exports.h"
+
 #define INSTANCE_IMP(class_name, ...) \
 class_name &class_name::Instance() { \
     static std::shared_ptr<class_name> s_instance(new class_name(__VA_ARGS__)); \
@@ -55,7 +57,7 @@ class_name &class_name::Instance() { \
 namespace toolkit {
 
 #define StrPrinter ::toolkit::_StrPrinter()
-class _StrPrinter : public std::string {
+class ZLTOOLKIT_EXPORT _StrPrinter : public std::string {
 public:
     _StrPrinter() {}
 
@@ -76,7 +78,7 @@ private:
 
 //禁止拷贝基类  [AUTO-TRANSLATED:a4ca4dcb]
 //Prohibit copying of base classes
-class noncopyable {
+class ZLTOOLKIT_EXPORT noncopyable {
 protected:
     noncopyable() {}
     ~noncopyable() {}
@@ -129,7 +131,7 @@ CLASS_FUNC_TRAITS(Create)
  
  * [AUTO-TRANSLATED:54ef34ac]
  */
-class Creator {
+class ZLTOOLKIT_EXPORT Creator {
 public:
     /**
      * 创建对象，用空参数执行onCreate和onDestory函数
@@ -215,46 +217,46 @@ private:
         return instance; \
     }
 
-class AssertFailedException : public std::runtime_error {
+class ZLTOOLKIT_EXPORT AssertFailedException : public std::runtime_error {
 public:
     template<typename ...T>
     AssertFailedException(T && ...args) : std::runtime_error(std::forward<T>(args)...) {}
 };
 
-std::string makeRandStr(int sz, bool printable = true);
-uint64_t makeRandNum();
-std::string makeUuidStr();
-std::string hexdump(const void *buf, size_t len);
-std::string hexmem(const void* buf, size_t len);
-std::string exePath(bool isExe = true);
-std::string exeDir(bool isExe = true);
-std::string exeName(bool isExe = true);
+ZLTOOLKIT_EXPORT std::string makeRandStr(int sz, bool printable = true);
+ZLTOOLKIT_EXPORT uint64_t makeRandNum();
+ZLTOOLKIT_EXPORT std::string makeUuidStr();
+ZLTOOLKIT_EXPORT std::string hexdump(const void *buf, size_t len);
+ZLTOOLKIT_EXPORT std::string hexmem(const void* buf, size_t len);
+ZLTOOLKIT_EXPORT std::string exePath(bool isExe = true);
+ZLTOOLKIT_EXPORT std::string exeDir(bool isExe = true);
+ZLTOOLKIT_EXPORT std::string exeName(bool isExe = true);
 
-std::vector<std::string> split(const std::string& s, const char *delim);
+ZLTOOLKIT_EXPORT std::vector<std::string> split(const std::string& s, const char *delim);
 //去除前后的空格、回车符、制表符...  [AUTO-TRANSLATED:7c50cbc8]
 //Remove leading and trailing spaces, line breaks, tabs...
-std::string& trim(std::string &s,const std::string &chars=" \r\n\t");
-std::string trim(std::string &&s,const std::string &chars=" \r\n\t");
+ZLTOOLKIT_EXPORT std::string& trim(std::string &s,const std::string &chars=" \r\n\t");
+ZLTOOLKIT_EXPORT std::string trim(std::string &&s,const std::string &chars=" \r\n\t");
 // string转小写  [AUTO-TRANSLATED:bf92618b]
 //Convert string to lowercase
-std::string &strToLower(std::string &str);
-std::string strToLower(std::string &&str);
+ZLTOOLKIT_EXPORT std::string &strToLower(std::string &str);
+ZLTOOLKIT_EXPORT std::string strToLower(std::string &&str);
 // string转大写  [AUTO-TRANSLATED:0197b884]
 //Convert string to uppercase
-std::string &strToUpper(std::string &str);
-std::string strToUpper(std::string &&str);
+ZLTOOLKIT_EXPORT std::string &strToUpper(std::string &str);
+ZLTOOLKIT_EXPORT std::string strToUpper(std::string &&str);
 //替换子字符串  [AUTO-TRANSLATED:cbacb116]
 //Replace substring
-void replace(std::string &str, const std::string &old_str, const std::string &new_str, std::string::size_type b_pos = 0) ;
+ZLTOOLKIT_EXPORT void replace(std::string &str, const std::string &old_str, const std::string &new_str, std::string::size_type b_pos = 0) ;
 //判断是否为ip  [AUTO-TRANSLATED:288e7a54]
 //Determine if it's an IP
-bool isIP(const char *str);
+ZLTOOLKIT_EXPORT bool isIP(const char *str);
 //字符串是否以xx开头  [AUTO-TRANSLATED:585cf826]
 //Check if a string starts with xx
-bool start_with(const std::string &str, const std::string &substr);
+ZLTOOLKIT_EXPORT bool start_with(const std::string &str, const std::string &substr);
 //字符串是否以xx结尾  [AUTO-TRANSLATED:50cc80d7]
 //Check if a string ends with xx
-bool end_with(const std::string &str, const std::string &substr);
+ZLTOOLKIT_EXPORT bool end_with(const std::string &str, const std::string &substr);
 //拼接格式字符串  [AUTO-TRANSLATED:2f902ef7]
 //Concatenate format string
 template<typename... Args>
@@ -294,12 +296,12 @@ std::string to_string(T value){
 #endif//ANDROID
 
 #if defined(_WIN32)
-int gettimeofday(struct timeval *tp, void *tzp);
-void usleep(int micro_seconds);
-void sleep(int second);
-int vasprintf(char **strp, const char *fmt, va_list ap);
-int asprintf(char **strp, const char *fmt, ...);
-const char *strcasestr(const char *big, const char *little);
+ZLTOOLKIT_EXPORT int gettimeofday(struct timeval *tp, void *tzp);
+ZLTOOLKIT_EXPORT void usleep(int micro_seconds);
+ZLTOOLKIT_EXPORT void sleep(int second);
+ZLTOOLKIT_EXPORT int vasprintf(char **strp, const char *fmt, va_list ap);
+ZLTOOLKIT_EXPORT int asprintf(char **strp, const char *fmt, ...);
+ZLTOOLKIT_EXPORT const char *strcasestr(const char *big, const char *little);
 
 #if !defined(strcasecmp)
     #define strcasecmp _stricmp
@@ -324,7 +326,7 @@ const char *strcasestr(const char *big, const char *little);
  
  * [AUTO-TRANSLATED:43d2403a]
  */
-long getGMTOff();
+ZLTOOLKIT_EXPORT long getGMTOff();
 
 /**
  * 获取1970年至今的毫秒数
@@ -334,7 +336,7 @@ long getGMTOff();
  
  * [AUTO-TRANSLATED:9857bfbe]
  */
-uint64_t getCurrentMillisecond(bool system_time = false);
+ZLTOOLKIT_EXPORT uint64_t getCurrentMillisecond(bool system_time = false);
 
 /**
  * 获取1970年至今的微秒数
@@ -344,7 +346,7 @@ uint64_t getCurrentMillisecond(bool system_time = false);
  
  * [AUTO-TRANSLATED:e4bed7e3]
  */
-uint64_t getCurrentMicrosecond(bool system_time = false);
+ZLTOOLKIT_EXPORT uint64_t getCurrentMicrosecond(bool system_time = false);
 
 /**
  * 获取时间字符串
@@ -356,7 +358,7 @@ uint64_t getCurrentMicrosecond(bool system_time = false);
  
  * [AUTO-TRANSLATED:444636ec]
  */
-std::string getTimeStr(const char *fmt,time_t time = 0);
+ZLTOOLKIT_EXPORT std::string getTimeStr(const char *fmt,time_t time = 0);
 
 /**
  * 根据unix时间戳获取本地时间
@@ -368,7 +370,7 @@ std::string getTimeStr(const char *fmt,time_t time = 0);
  
  * [AUTO-TRANSLATED:22a03a5b]
  */
-struct tm getLocalTime(time_t sec);
+ZLTOOLKIT_EXPORT struct tm getLocalTime(time_t sec);
 
 /**
  * 设置线程名
@@ -376,7 +378,7 @@ struct tm getLocalTime(time_t sec);
  
  * [AUTO-TRANSLATED:d0bcbcdc]
  */
-void setThreadName(const char *name);
+ZLTOOLKIT_EXPORT void setThreadName(const char *name);
 
 /**
  * 获取线程名
@@ -384,7 +386,7 @@ void setThreadName(const char *name);
  
  * [AUTO-TRANSLATED:99245fec]
  */
-std::string getThreadName();
+ZLTOOLKIT_EXPORT std::string getThreadName();
 
 /**
  * 设置当前线程cpu亲和性
@@ -396,7 +398,7 @@ std::string getThreadName();
  
  * [AUTO-TRANSLATED:9b3d6a83]
  */
-bool setThreadAffinity(int i);
+ZLTOOLKIT_EXPORT bool setThreadAffinity(int i);
 
 /**
  * 根据typeid(class).name()获取类名
@@ -404,7 +406,7 @@ bool setThreadAffinity(int i);
  
  * [AUTO-TRANSLATED:7ac66c58]
  */
-std::string demangle(const char *mangled);
+ZLTOOLKIT_EXPORT std::string demangle(const char *mangled);
 
 /**
  * 获取环境变量内容，以'$'开头
@@ -412,11 +414,11 @@ std::string demangle(const char *mangled);
  
  * [AUTO-TRANSLATED:c2c1689d]
  */
-std::string getEnv(const std::string &key);
+ZLTOOLKIT_EXPORT std::string getEnv(const std::string &key);
 
 // 可以保存任意的对象  [AUTO-TRANSLATED:e7c40bad]
 //Can store any object
-class Any {
+class ZLTOOLKIT_EXPORT Any {
 public:
     using Ptr = std::shared_ptr<Any>;
 
@@ -526,7 +528,7 @@ private:
 
 // 用于保存一些外加属性  [AUTO-TRANSLATED:cfbc20a3]
 //Used to store some additional properties
-class AnyStorage : public std::unordered_map<std::string, Any> {
+class ZLTOOLKIT_EXPORT AnyStorage : public std::unordered_map<std::string, Any> {
 public:
     AnyStorage() = default;
     ~AnyStorage() = default;
@@ -613,7 +615,7 @@ private:
 #ifdef __cplusplus
 extern "C" {
 #endif
-extern void Assert_Throw(int failed, const char *exp, const char *func, const char *file, int line, const char *str);
+ZLTOOLKIT_EXPORT void Assert_Throw(int failed, const char *exp, const char *func, const char *file, int line, const char *str);
 #ifdef __cplusplus
 }
 #endif

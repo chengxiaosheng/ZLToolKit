@@ -14,10 +14,11 @@
 #include <mutex>
 #include <chrono>
 #include <condition_variable>
+#include "toolkit/exports.h"
 
 namespace toolkit {
 
-class semaphore {
+class ZLTOOLKIT_EXPORT semaphore {
 public:
     explicit semaphore(size_t initial = 0) {
 #if defined(HAVE_SEM)

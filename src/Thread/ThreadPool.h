@@ -16,10 +16,11 @@
 #include "TaskExecutor.h"
 #include "Util/util.h"
 #include "Util/logger.h"
+#include "toolkit/exports.h"
 
 namespace toolkit {
 
-class ThreadPool : public TaskExecutor {
+class ZLTOOLKIT_EXPORT ThreadPool : public TaskExecutor {
 public:
     enum Priority {
         PRIORITY_LOWEST = 0,

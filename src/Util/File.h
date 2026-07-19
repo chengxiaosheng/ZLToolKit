@@ -16,6 +16,7 @@
 #include <string>
 #include "util.h"
 #include <functional>
+#include "toolkit/exports.h"
 
 #if defined(__linux__)
 #include <limits.h>
@@ -45,10 +46,10 @@ typedef struct _dirdesc {
 } DIR;
 # define __dirfd(dp)    ((dp)->dd_fd)
 
-int mkdir(const char *path, int mode);
-DIR *opendir(const char *);
-int closedir(DIR *);
-struct dirent *readdir(DIR *);
+ZLTOOLKIT_EXPORT int mkdir(const char *path, int mode);
+ZLTOOLKIT_EXPORT DIR *opendir(const char *);
+ZLTOOLKIT_EXPORT int closedir(DIR *);
+ZLTOOLKIT_EXPORT struct dirent *readdir(DIR *);
 
 #endif // defined(_WIN32)
 
@@ -62,7 +63,7 @@ struct dirent *readdir(DIR *);
 
 namespace toolkit {
 
-class File {
+class ZLTOOLKIT_EXPORT File {
 public:
     //创建路径  [AUTO-TRANSLATED:419b36b7]
     //Create path

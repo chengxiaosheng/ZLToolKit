@@ -13,10 +13,11 @@
 
 #include <functional>
 #include "EventPoller.h"
+#include "toolkit/exports.h"
 
 namespace toolkit {
 
-class Timer {
+class ZLTOOLKIT_EXPORT Timer {
 public:
     using Ptr = std::shared_ptr<Timer>;
 

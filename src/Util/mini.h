@@ -27,6 +27,7 @@
 #include <vector>
 #include <fstream>
 #include "util.h"
+#include "toolkit/exports.h"
 
 namespace toolkit {
 
@@ -182,7 +183,7 @@ private:
 };
 
 //  handy variant class as key/values
-struct variant : public std::string {
+struct ZLTOOLKIT_EXPORT variant : public std::string {
     template<typename T>
     variant(const T &t) :
             std::string(std::to_string(t)) {

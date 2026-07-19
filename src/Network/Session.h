@@ -16,6 +16,7 @@
 #include "Util/util.h"
 #include "Util/SSLBox.h"
 #include "Kcp.h"
+#include "toolkit/exports.h"
 
 namespace toolkit {
 
@@ -25,7 +26,7 @@ class Server;
 class TcpSession;
 class UdpSession;
 
-class Session : public SocketHelper {
+class ZLTOOLKIT_EXPORT Session : public SocketHelper {
 public:
     using Ptr = std::shared_ptr<Session>;
 

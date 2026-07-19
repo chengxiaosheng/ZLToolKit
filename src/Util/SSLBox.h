@@ -19,6 +19,7 @@
 #include "util.h"
 #include "Network/Buffer.h"
 #include "ResourcePool.h"
+#include "toolkit/exports.h"
 
 typedef struct x509_st X509;
 typedef struct evp_pkey_st EVP_PKEY;
@@ -28,7 +29,7 @@ typedef struct bio_st BIO;
 
 namespace toolkit {
 
-class SSL_Initor {
+class ZLTOOLKIT_EXPORT SSL_Initor {
 public:
     friend class SSL_Box;
 
@@ -193,7 +194,7 @@ private:
 
 ////////////////////////////////////////////////////////////////////////////////////
 
-class SSL_Box {
+class ZLTOOLKIT_EXPORT SSL_Box {
 public:
     SSL_Box(bool server_mode = true, bool enable = true, int buff_size = 32 * 1024);
 

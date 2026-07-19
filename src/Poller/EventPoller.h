@@ -25,6 +25,7 @@
 #include "Thread/ThreadPool.h"
 #include "Network/Buffer.h"
 #include "Network/BufferSock.h"
+#include "toolkit/exports.h"
 
 #if defined(__linux__) || defined(__linux)
 #define HAS_EPOLL
@@ -46,7 +47,7 @@ constexpr epoll_fd INVALID_EVENT_FD = -1;
 
 namespace toolkit {
 
-class EventPoller : public TaskExecutor, public AnyStorage, public std::enable_shared_from_this<EventPoller> {
+class ZLTOOLKIT_EXPORT EventPoller : public TaskExecutor, public AnyStorage, public std::enable_shared_from_this<EventPoller> {
 public:
     friend class TaskExecutorGetterImp;
 
@@ -202,13 +203,27 @@ public:
      */
     const std::string &getThreadName() const;
 
+    void runOnQuit(std::function<void()> cb);
+
+    /**
+     * 获取EventPoller 在 Pool中的索引
+     * @return
+     */
+    uint32_t index() const {
+        return _index;
+    }
+
+    static std::shared_ptr<EventPoller> createMainPoller();
+
+    void runMainLoop();
+
 private:
     /**
      * 本对象只允许在EventPollerPool中构造
      * This object can only be constructed in EventPollerPool
      * [AUTO-TRANSLATED:0c9a8a28]
      */
-    EventPoller(std::string name);
+    EventPoller(std::string name, uint32_t index = 0);
 
     /**
      * 执行事件轮询
@@ -272,6 +287,8 @@ private:
      * [AUTO-TRANSLATED:06e5bc67]
      */
     void addEventPipe();
+
+
 
 private:
     class ExitException : public std::exception {};
@@ -339,9 +356,13 @@ private:
     // 定时器相关  [AUTO-TRANSLATED:fa2e84da]
     // Timer related
     std::multimap<uint64_t, DelayTask::Ptr> _delay_task_map;
+    //
+    std::vector<std::function<void()>> _exit_callbacks;
+    // 在Pool中的索引
+    uint32_t _index{0};
 };
 
-class EventPollerPool : public std::enable_shared_from_this<EventPollerPool>, public TaskExecutorGetterImp {
+class ZLTOOLKIT_EXPORT EventPollerPool : public std::enable_shared_from_this<EventPollerPool>, public TaskExecutorGetterImp {
 public:
     using Ptr = std::shared_ptr<EventPollerPool>;
     static const std::string kOnStarted;
@@ -397,6 +418,8 @@ public:
      * [AUTO-TRANSLATED:f0830806]
      */
     EventPoller::Ptr getPoller(bool prefer_current_thread = true);
+
+    EventPoller::Ptr operator[](size_t index) const noexcept;
 
     /**
      * 设置 getPoller() 是否优先返回当前线程

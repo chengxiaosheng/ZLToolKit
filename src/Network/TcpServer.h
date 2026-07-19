@@ -18,12 +18,13 @@
 #include "Session.h"
 #include "Poller/Timer.h"
 #include "Util/util.h"
+#include "toolkit/exports.h"
 
 namespace toolkit {
 
 //TCP服务器，可配置的；配置通过Session::attachServer方法传递给会话对象  [AUTO-TRANSLATED:4e55c332]
 //Configurable TCP server; configuration is passed to the session object through the Session::attachServer method
-class TcpServer : public Server {
+class ZLTOOLKIT_EXPORT TcpServer : public Server {
 public:
     using Ptr = std::shared_ptr<TcpServer>;
 

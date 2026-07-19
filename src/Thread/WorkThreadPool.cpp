@@ -24,6 +24,9 @@ EventPoller::Ptr WorkThreadPool::getFirstPoller() {
 EventPoller::Ptr WorkThreadPool::getPoller() {
     return std::static_pointer_cast<EventPoller>(getExecutor());
 }
+EventPoller::Ptr WorkThreadPool::operator[](size_t index) const noexcept {
+    return std::dynamic_pointer_cast<EventPoller>(_threads[index % this->getExecutorSize()]);
+}
 
 WorkThreadPool::WorkThreadPool() {
     //最低优先级  [AUTO-TRANSLATED:cd1f0dbc]

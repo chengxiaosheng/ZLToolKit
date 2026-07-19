@@ -15,11 +15,12 @@
 #include "Socket.h"
 #include "Util/SSLBox.h"
 #include "Kcp.h"
+#include "toolkit/exports.h"
 
 namespace toolkit {
 
 //Udp客户端，Socket对象默认开始互斥锁
-class UdpClient : public SocketHelper {
+class ZLTOOLKIT_EXPORT UdpClient : public SocketHelper {
 public:
     using Ptr = std::shared_ptr<UdpClient>;
     using OnRecvFrom = std::function<void(const Buffer::Ptr &buf, struct sockaddr *addr, int addr_len)>;

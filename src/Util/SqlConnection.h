@@ -24,6 +24,7 @@
 #include "logger.h"
 #include "util.h"
 #include <mysql.h>
+#include "toolkit/exports.h"
 
 #if defined(_WIN32)
 #pragma  comment (lib,"libmysql") 
@@ -37,7 +38,7 @@ namespace toolkit {
  
  * [AUTO-TRANSLATED:f92df85e]
  */
-class SqlException : public std::exception {
+class ZLTOOLKIT_EXPORT SqlException : public std::exception {
 public:
     SqlException(const std::string &sql, const std::string &err) {
         _sql = sql;
@@ -63,7 +64,7 @@ private:
  
  * [AUTO-TRANSLATED:a2deb48d]
  */
-class SqlConnection {
+class ZLTOOLKIT_EXPORT SqlConnection {
 public:
     /**
      * 构造函数
