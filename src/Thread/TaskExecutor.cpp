@@ -226,6 +226,9 @@ void TaskExecutorGetterImp::for_each(const function<void(const TaskExecutor::Ptr
 size_t TaskExecutorGetterImp::getExecutorSize() const {
     return _threads.size();
 }
+bool TaskExecutorGetterImp::threadInLoopPool(const TaskExecutor::Ptr &executor) const noexcept {
+    return std::find(_threads.begin(), _threads.end(), executor) != _threads.end();
+}
 
 size_t TaskExecutorGetterImp::addPoller(const string &name, size_t size, int priority, bool register_thread, bool enable_cpu_affinity) {
     auto cpus = thread::hardware_concurrency();

@@ -651,7 +651,7 @@ EventPoller::Ptr EventPollerPool::getFirstPoller() {
 
 EventPoller::Ptr EventPollerPool::getPoller(bool prefer_current_thread) {
     auto poller = EventPoller::getCurrentPoller();
-    if (prefer_current_thread && _prefer_current_thread && poller) {
+    if (prefer_current_thread && _prefer_current_thread && poller && threadInLoopPool(poller)) {
         return poller;
     }
     return static_pointer_cast<EventPoller>(getExecutor());

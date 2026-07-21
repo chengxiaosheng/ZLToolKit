@@ -297,6 +297,8 @@ public:
      */
     size_t getExecutorSize() const override;
 
+    bool threadInLoopPool(const TaskExecutor::Ptr &executor) const noexcept;
+
 protected:
     size_t addPoller(const std::string &name, size_t size, int priority, bool register_thread, bool enable_cpu_affinity = true);
 
