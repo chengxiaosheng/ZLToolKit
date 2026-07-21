@@ -304,7 +304,13 @@ Task::Ptr EventPoller::async_l(TaskIn task, bool may_sync, bool first) {
 }
 
 bool EventPoller::isCurrentThread() {
-    return !_loop_thread || _loop_thread->get_id() == this_thread::get_id();
+    // loop 尚未启动（_thread_id 仍为默认值）时视为当前线程：构造函数里的
+    // addEventPipe/addEvent 需要在构造线程同步把 pipe readFD 加入 _event_map，
+    // 否则 loop 启动后首轮 select 无可监听 fd，排队中的 addEvent 又依赖
+    // onPipeEvent（需 readFD 已监听）才执行，形成死锁。
+    // loop 一旦在 runLoop(true) 入口设置 _thread_id，则严格比较，确保运行期
+    // async/async_l 只在真正的 loop 线程同步执行、其余线程入队+写管道唤醒。
+    return _thread_id == std::thread::id{} || _thread_id == this_thread::get_id();
 }
 
 inline void EventPoller::onPipeEvent(bool flush) {
@@ -361,7 +367,7 @@ SocketRecvBuffer::Ptr EventPoller::getSharedBuffer(bool is_udp) {
 }
 
 thread::id EventPoller::getThreadId() const {
-    return _loop_thread ? _loop_thread->get_id() : thread::id();
+    return _loop_thread ? _loop_thread->get_id() : _thread_id;
 }
 
 const std::string& EventPoller::getThreadName() const {
@@ -391,12 +397,13 @@ std::shared_ptr<EventPoller> EventPoller::createMainPoller() {
     }
     auto poller = std::shared_ptr<EventPoller>(new EventPoller("main-poller"));
     s_current_poller = poller;
+    // _thread_id 在 runLoop(true) 入口由真正跑循环的线程确立，
+    // 这里不预置，避免把创建线程误认成 loop 线程。
     return poller;
 }
 void EventPoller::runMainLoop() {
     if (this->_name != "main-poller") return;
     runLoop(true, true);
-    _sem_run_started.wait();
 }
 
 void EventPoller::runLoop(bool blocked, bool ref_self) {
@@ -404,6 +411,7 @@ void EventPoller::runLoop(bool blocked, bool ref_self) {
         if (ref_self) {
             s_current_poller = shared_from_this();
         }
+        _thread_id = std::this_thread::get_id();
         _sem_run_started.post();
         _exit_flag = false;
         int64_t minDelay;

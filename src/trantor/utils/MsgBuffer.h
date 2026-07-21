@@ -80,7 +80,7 @@ class ZLTOOLKIT_EXPORT MsgBuffer: public toolkit::Buffer
         }
         return *this;
     }
-    // 注意：不提供移动构造/赋值（Buffer 基类 noncopyable 且不可移动）。
+    MsgBuffer &operator=(MsgBuffer &&other) noexcept;
 
     /**
      * @brief Get the beginning of the buffer.

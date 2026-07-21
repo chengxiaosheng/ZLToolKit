@@ -44,6 +44,17 @@ MsgBuffer::MsgBuffer(MsgBuffer &&other) noexcept
     other.head_ = other.tail_ = kBufferOffset;
 }
 
+MsgBuffer &MsgBuffer::operator=(MsgBuffer &&other) noexcept {
+    if (this != &other) {
+        head_ = other.head_;
+        initCap_ = other.initCap_;
+        buffer_ = std::move(other.buffer_);
+        tail_ = other.tail_;
+        other.head_ = other.tail_ = kBufferOffset;
+    }
+    return *this;
+}
+
 void MsgBuffer::ensureWritableBytes(size_t len)
 {
     if (writableBytes() >= len)

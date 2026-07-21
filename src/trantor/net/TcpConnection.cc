@@ -40,42 +40,6 @@ using namespace toolkit;
 
 namespace trantor
 {
-namespace
-{
-// 跨平台 UTF-8 / 宽字符文件打开
-FILE *openFileUtf8(const char *name)
-{
-#ifdef _WIN32
-    int wlen = MultiByteToWideChar(CP_UTF8, 0, name, -1, nullptr, 0);
-    if (wlen <= 0)
-        return nullptr;
-    std::wstring w(wlen, 0);
-    MultiByteToWideChar(CP_UTF8, 0, name, -1, &w[0], wlen);
-    return _wfopen(w.c_str(), L"rb");
-#else
-    return std::fopen(name, "rb");
-#endif
-}
-
-FILE *openFileWide(const wchar_t *name)
-{
-#ifdef _WIN32
-    return _wfopen(name, L"rb");
-#else
-    (void)name;
-    return nullptr;  // 非 Windows 不支持宽字符路径
-#endif
-}
-
-constexpr size_t kFileChunkSize = 64 * 1024;
-}  // namespace
-
-// 挂起的 file/stream 生产者
-struct TcpConnection::PendingProducer
-{
-    std::function<Buffer::Ptr()> next;  // 返回 nullptr 表示结束
-    bool done = false;
-};
 
 // AsyncStream 具体实现：直接转发到 TcpConnection::send（Socket 队列保序）
 

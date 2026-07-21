@@ -360,6 +360,7 @@ private:
     std::vector<std::function<void()>> _exit_callbacks;
     // 在Pool中的索引
     uint32_t _index{0};
+    std::thread::id _thread_id{};
 };
 
 class ZLTOOLKIT_EXPORT EventPollerPool : public std::enable_shared_from_this<EventPollerPool>, public TaskExecutorGetterImp {
