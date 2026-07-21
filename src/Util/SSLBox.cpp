@@ -411,6 +411,7 @@ void SSL_Box::onRecv(const Buffer::Ptr &buffer) {
         //nwrite <= 0,出现异常  [AUTO-TRANSLATED:986e8f36]
         //nwrite <= 0, an error occurred
         ErrorL << "Ssl error on BIO_write: " << SSLUtil::getLastError();
+        notifyError();
         shutdown();
         break;
     }
@@ -495,6 +496,15 @@ void SSL_Box::flushReadBio() {
         }
     } while (nread > 0 && buf_size - total > 0);
 
+    // Detect unrecoverable SSL errors (skip WANT_READ/WANT_WRITE/ZERO_RETURN)
+    if (nread < 0) {
+        int err = SSL_get_error(_ssl.get(), nread);
+        if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE &&
+            err != SSL_ERROR_ZERO_RETURN) {
+            notifyError(err);
+        }
+    }
+
     if (!total) {
         //未有数据  [AUTO-TRANSLATED:9ae3aaa5]
         //No data available
@@ -559,6 +569,7 @@ void SSL_Box::flush() {
             //这个包未消费完毕，出现了异常,清空数据并断开ssl  [AUTO-TRANSLATED:1823c65a]
             //This package has not been fully consumed, an exception occurred, clear data and disconnect ssl
             ErrorL << "Ssl error on SSL_write: " << SSLUtil::getLastError();
+            notifyError();
             shutdown();
             break;
         }
@@ -579,6 +590,78 @@ bool SSL_Box::setHost(const char *host) {
 #else
     return false;
 #endif//SSL_ENABLE_SNI
+}
+
+void SSL_Box::setOnErr(const std::function<void(trantor::SSLError)> &cb) {
+    _on_err = cb;
+}
+
+std::shared_ptr<X509> SSL_Box::getPeerCertificate() const {
+#if defined(ENABLE_OPENSSL)
+    if (!_ssl) {
+        return nullptr;
+    }
+    // SSL_get_peer_certificate returns a new reference (caller frees)
+    X509 *cer = SSL_get_peer_certificate(_ssl.get());
+    if (!cer) {
+        return nullptr;
+    }
+    return std::shared_ptr<X509>(cer, [](X509 *p) {
+        if (p) X509_free(p);
+    });
+#else
+    return nullptr;
+#endif
+}
+
+std::string SSL_Box::getSNIName() const {
+#if defined(ENABLE_OPENSSL) && defined(SSL_ENABLE_SNI)
+    if (!_ssl) {
+        return "";
+    }
+    const char *name = SSL_get_servername(_ssl.get(), TLSEXT_NAMETYPE_host_name);
+    return name ? std::string(name) : std::string();
+#else
+    return "";
+#endif
+}
+
+std::string SSL_Box::getApplicationProtocol() const {
+#if defined(ENABLE_OPENSSL)
+    if (!_ssl) {
+        return "";
+    }
+    const unsigned char *data = nullptr;
+    unsigned int len = 0;
+    SSL_get0_alpn_selected(_ssl.get(), &data, &len);
+    if (!data || !len) {
+        return "";
+    }
+    return std::string(reinterpret_cast<const char *>(data), len);
+#else
+    return "";
+#endif
+}
+
+void SSL_Box::notifyError(int sslError) {
+#if defined(ENABLE_OPENSSL)
+    if (!_on_err || !_ssl) {
+        return;
+    }
+    // Determine error category
+    long verifyResult = SSL_get_verify_result(_ssl.get());
+    bool handshakePhase = !SSL_is_init_finished(_ssl.get());
+    if (verifyResult != X509_V_OK) {
+        _on_err(trantor::SSLError::kSSLInvalidCertificate);
+    } else if (handshakePhase) {
+        _on_err(trantor::SSLError::kSSLHandshakeError);
+    } else {
+        (void)sslError;
+        _on_err(trantor::SSLError::kSSLProtocolError);
+    }
+#else
+    (void)sslError;
+#endif
 }
 
 // ==================== TLSSessionFactory implementation ====================

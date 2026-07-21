@@ -9,12 +9,17 @@
  *  Use of this source code is governed by a BSD-style license
  *  that can be found in the License file.
  *
+ *  薄委托实现：基于 toolkit::SocketHelper（Session / TcpClient 均派生自它）
+ *  通过 set_session<T>() 绑定传输层，不破坏 Session/TcpClient 继承层级。
  *
  */
 
 #pragma once
 #include <toolkit/exports.h>
 #include <Poller/EventPoller.h>
+#include <Network/Socket.h>   // toolkit::SocketHelper, toolkit::Socket
+#include <Network/Buffer.h>   // toolkit::Buffer
+#include <Util/SSLBox.h>      // toolkit::SSL_Box
 #include <trantor/net/InetAddress.h>
 #include <Util/util.h>
 #include <trantor/utils/MsgBuffer.h>
@@ -25,9 +30,11 @@
 #include <memory>
 #include <functional>
 #include <string>
+#include <atomic>
 
 namespace trantor
 {
+class BufferNode;
 class TimingWheel;
 
 struct SSLContext;
@@ -36,153 +43,97 @@ using SSLContextPtr = std::shared_ptr<SSLContext>;
 /**
  * @brief This class represents a TCP connection.
  *
+ * 薄委托具体类：持 weak_ptr<toolkit::SocketHelper>（服务端为 HttpSession，
+ * 客户端为 HttpClientConn）+ shared_ptr<toolkit::Socket>。send 直接走 Socket
+ * 自带的安全队列；sendFile/sendStream/sendAsyncStream 经 Socket::onFlush
+ * 分块拉取。无 BufferNode 写队列。
  */
 class ZLTOOLKIT_EXPORT TcpConnection
+    : public std::enable_shared_from_this<TcpConnection>
 {
   public:
-    friend class TcpServer;
-    friend class TcpConnectionImpl;
-    friend class TcpClient;
+    TcpConnection() : loop_(toolkit::EventPollerPool::Instance().getPoller()) {
 
-    TcpConnection() = default;
-    virtual ~TcpConnection(){};
+    }
+    ~TcpConnection();
 
     /**
-     * @brief Send some data to the peer.
-     *
-     * @param msg
-     * @param len
+     * @brief 绑定传输层（toolkit::Session 或 toolkit::TcpClient，均为
+     * SocketHelper 派生）。构造后、connectEstablished() 前调用一次。
+     * 持 weak_ptr 破环；Socket 强引用以便 helper 死后仍可读地址/字节。
      */
-    virtual void send(const char *msg, size_t len) = 0;
-    virtual void send(const void *msg, size_t len) = 0;
-    virtual void send(const std::string &msg) = 0;
-    virtual void send(std::string &&msg) = 0;
-    virtual void send(const MsgBuffer &buffer) = 0;
-    virtual void send(MsgBuffer &&buffer) = 0;
-    virtual void send(const std::shared_ptr<std::string> &msgPtr) = 0;
-    virtual void send(const std::shared_ptr<MsgBuffer> &msgPtr) = 0;
+    template <typename SessionType>
+    void set_session(const std::shared_ptr<SessionType> &session)
+    {
+        auto helper =
+            std::static_pointer_cast<toolkit::SocketHelper>(session);
 
-    /**
-     * @brief Send a file to the peer.
-     *
-     * @param fileName in UTF-8
-     * @param offset
-     * @param length
-     */
-    virtual void sendFile(const char *fileName,
-                          long long offset = 0,
-                          long long length = 0) = 0;
-    /**
-     * @brief Send a file to the peer.
-     *
-     * @param fileName in wide string (eg. windows native UCS-2)
-     * @param offset
-     * @param length
-     */
-    virtual void sendFile(const wchar_t *fileName,
-                          long long offset = 0,
-                          long long length = 0) = 0;
-    /**
-     * @brief Send a stream to the peer.
-     *
-     * @param callback function to retrieve the stream data (stream ends when a
-     * zero size is returned) the callback will be called with nullptr when the
-     * send is finished/interrupted, so that it cleans up any internal data (ex:
-     * close file).
-     * @warning The buffer size should be >= 10 to allow http chunked-encoding
-     * data stream
-     */
-    virtual void sendStream(std::function<std::size_t(char *, std::size_t)>
-                                callback) = 0;  // (buffer, buffer size) -> size
-                                                // of data put in buffer
+        helper_ = helper;
 
-    /**
-     * @brief Send a stream to the peer asynchronously.
-     * @param disableKickoff Disable the kickoff mechanism. If this parameter is
-     * enabled, the connection will not be closed after the inactive timeout.
-     * @note The subsequent data sent after the async stream will be sent after
-     * the stream is closed.
-     */
-    virtual AsyncStreamPtr sendAsyncStream(bool disableKickoff = false) = 0;
-    /**
-     * @brief Get the local address of the connection.
-     *
-     * @return const InetAddress&
-     */
+        if (auto sock = helper->getSock())
+        {
+            localAddr_ =
+                InetAddress(sock->get_local_ip(), sock->get_local_port());
+            peerAddr_ =
+                InetAddress(sock->get_peer_ip(), sock->get_peer_port());
+        }
+        // 接线 SSL 错误回调（若为 TLS 包装的传输）
+        if (helper)
+        {
+            if (auto *box = helper->getSSLBox())
+            {
+                std::weak_ptr<TcpConnection> weakSelf = weak_from_this();
+                box->setOnErr([weakSelf](SSLError err) {
+                    if (auto self = weakSelf.lock())
+                    {
+                        if (self->sslErrorCallback_)
+                            self->sslErrorCallback_(err);
+                    }
+                });
+            }
+        }
+    }
 
-    virtual const InetAddress &localAddr() const = 0;
+    /// @brief Send some data to the peer.
+    void send(const char *msg, size_t len);
+    void send(const void *msg, size_t len);
+    void send(const std::string &msg);
+    void send(std::string &&msg);
+    void send(const MsgBuffer &buffer);
+    void send(MsgBuffer &&buffer);
+    void send(const std::shared_ptr<toolkit::Buffer> &buffer);
+    void sendFile(std::shared_ptr<BufferNode> &&fileNode);
 
-    /**
-     * @brief Get the remote address of the connection.
-     *
-     * @return const InetAddress&
-     */
-    virtual const InetAddress &peerAddr() const = 0;
+    /// @brief Send a file (UTF-8 path).
+    void sendFile(const char *fileName,
+                  long long offset = 0,
+                  long long length = 0);
+    /// @brief Send a file (wide path, Windows UCS-2).
+    void sendFile(const wchar_t *fileName,
+                  long long offset = 0,
+                  long long length = 0);
+    /// @brief Send a stream via pull callback (returns 0 = end).
+    void sendStream(std::function<std::size_t(char *, std::size_t)> callback);
+    /// @brief Send an async stream.
+    AsyncStreamPtr sendAsyncStream(bool disableKickoff = false);
 
-    /**
-     * @brief Return true if the connection is established.
-     *
-     * @return true
-     * @return false
-     */
-    virtual bool connected() const = 0;
+    const InetAddress &localAddr() const { return localAddr_; }
+    const InetAddress &peerAddr() const { return peerAddr_; }
+    bool connected() const { return connected_; }
+    bool disconnected() const { return !connected_; }
 
-    /**
-     * @brief Return false if the connection is established.
-     *
-     * @return true
-     * @return false
-     */
-    virtual bool disconnected() const = 0;
+    void setHighWaterMarkCallback(const HighWaterMarkCallback &cb,
+                                  size_t markLen);
+    void setTcpNoDelay(bool on);
 
-    /* *
-     * @brief Get the buffer in which the received data stored.
-     *
-     * @return MsgBuffer*
-     */
-    // virtual MsgBuffer *getRecvBuffer() = 0;
+    /// @brief Shutdown the writing direction (half-close).
+    void shutdown();
+    /// @brief Close the connection forcefully.
+    void forceClose();
 
-    /**
-     * @brief Set the high water mark callback
-     *
-     * @param cb The callback is called when the data in sending buffer is
-     * larger than the water mark.
-     * @param markLen The water mark in bytes.
-     */
-    virtual void setHighWaterMarkCallback(const HighWaterMarkCallback &cb,
-                                          size_t markLen) = 0;
+    std::shared_ptr<toolkit::EventPoller> getLoop() { return loop_; }
 
-    /**
-     * @brief Set the TCP_NODELAY option to the socket.
-     *
-     * @param on
-     */
-    virtual void setTcpNoDelay(bool on) = 0;
-
-    /**
-     * @brief Shutdown the connection.
-     * @note This method only closes the writing direction.
-     */
-    virtual void shutdown() = 0;
-
-    /**
-     * @brief Close the connection forcefully.
-     *
-     */
-    virtual void forceClose() = 0;
-
-    /**
-     * @brief Get the event loop in which the connection I/O is handled.
-     *
-     * @return EventLoop*
-     */
-    virtual std::shared_ptr<toolkit::EventPoller> getLoop() = 0;
-
-    /**
-     * @brief Set the custom data on the connection.
-     *
-     * @param context
-     */
+    /// @brief Set/get custom context.
     void setContext(const std::shared_ptr<void> &context)
     {
         contextPtr_ = context;
@@ -191,112 +142,28 @@ class ZLTOOLKIT_EXPORT TcpConnection
     {
         contextPtr_ = std::move(context);
     }
-    virtual std::string applicationProtocol() const = 0;
-
-    /**
-     * @brief Get the custom data from the connection.
-     *
-     * @tparam T
-     * @return std::shared_ptr<T>
-     */
     template <typename T>
     std::shared_ptr<T> getContext() const
     {
         return std::static_pointer_cast<T>(contextPtr_);
     }
+    bool hasContext() const { return (bool)contextPtr_; }
+    void clearContext() { contextPtr_.reset(); }
 
-    /**
-     * @brief Return true if the custom data is set by user.
-     *
-     * @return true
-     * @return false
-     */
-    bool hasContext() const
-    {
-        return (bool)contextPtr_;
-    }
+    std::string applicationProtocol() const;
+    void keepAlive();
+    bool isKeepAlive();
+    size_t bytesSent() const;
+    size_t bytesReceived() const;
+    bool isSSLConnection() const;
+    MsgBuffer *getRecvBuffer();
+    CertificatePtr peerCertificate() const;
+    std::string sniName() const;
 
-    /**
-     * @brief Clear the custom data.
-     *
-     */
-    void clearContext()
-    {
-        contextPtr_.reset();
-    }
-
-    /**
-     * @brief Call this method to avoid being kicked off by TcpServer, refer to
-     * the kickoffIdleConnections method in the TcpServer class.
-     *
-     */
-    virtual void keepAlive() = 0;
-
-    /**
-     * @brief Return true if the keepAlive() method is called.
-     *
-     * @return true
-     * @return false
-     */
-    virtual bool isKeepAlive() = 0;
-
-    /**
-     * @brief Return the number of bytes sent
-     *
-     * @return size_t
-     */
-    virtual size_t bytesSent() const = 0;
-
-    /**
-     * @brief Return the number of bytes received.
-     *
-     * @return size_t
-     */
-    virtual size_t bytesReceived() const = 0;
-
-    /**
-     * @brief Check whether the connection is SSL encrypted.
-     *
-     * @return true
-     * @return false
-     */
-    virtual bool isSSLConnection() const = 0;
-
-    /**
-     * @brief Get buffer of unprompted data.
-     */
-    virtual MsgBuffer *getRecvBuffer() = 0;
-
-    /**
-     * @brief Get peer certificate (if any).
-     *
-     * @return pointer to Certificate object or nullptr if no certificate was
-     * provided
-     */
-    virtual CertificatePtr peerCertificate() const = 0;
-
-    /**
-     * @brief Get the SNI name (for server connections only)
-     *
-     * @return Empty string if no SNI name was provided (not an SSL connection
-     * or peer did not provide SNI)
-     */
-    virtual std::string sniName() const = 0;
-
-    /**
-     * @brief Start TLS. If the connection is specified as a server, the
-     * connection will be upgraded to a TLS server connection. If the connection
-     * is specified as a client, the connection will be upgraded to a TLS client
-     * @note This method is only available for non-SSL connections.
-     */
-    virtual void startEncryption(TLSPolicyPtr policy,
-                                 bool isServer,
-                                 std::function<void(const TcpConnectionPtr &)>
-                                     upgradeCallback = nullptr) = 0;
-    /**
-     * @brief Start TLS as a client.
-     * @note This method is only available for non-SSL connections.
-     */
+    void startEncryption(TLSPolicyPtr policy,
+                         bool isServer,
+                         std::function<void(const TcpConnectionPtr &)>
+                             upgradeCallback = nullptr);
     [[deprecated("Use startEncryption(TLSPolicyPtr) instead")]] void
     startClientEncryption(
         std::function<void(const TcpConnectionPtr &)> &&callback,
@@ -319,6 +186,7 @@ class ZLTOOLKIT_EXPORT TcpConnection
         tlsPolicy_ = std::move(policy);
     }
 
+    // ---- callback setters ----
     void setRecvMsgCallback(const RecvMessageCallback &cb)
     {
         recvMsgCallback_ = cb;
@@ -351,10 +219,7 @@ class ZLTOOLKIT_EXPORT TcpConnection
     {
         closeCallback_ = std::move(cb);
     }
-    CloseCallback getCloseCallback() const
-    {
-        return closeCallback_;
-    }
+    CloseCallback getCloseCallback() const { return closeCallback_; }
     void setSSLErrorCallback(const SSLErrorCallback &cb)
     {
         sslErrorCallback_ = cb;
@@ -364,14 +229,52 @@ class ZLTOOLKIT_EXPORT TcpConnection
         sslErrorCallback_ = std::move(cb);
     }
 
-    // TODO: These should be internal APIs
-    virtual void connectEstablished() = 0;
-    virtual void connectDestroyed() = 0;
-    virtual void enableKickingOff(
-        size_t timeout,
-        const std::shared_ptr<TimingWheel> &timingWheel) = 0;
+    // ---- 由传输层（HttpSession / HttpClientConn）调用 ----
+    void connectEstablished();
+    void connectDestroyed();
+    void enableKickingOff(size_t timeout,
+                          const std::shared_ptr<TimingWheel> &timingWheel =
+                              nullptr);
+    void forwardToTLSBuffer(MsgBuffer *buffer);
 
-    virtual void forwardToTLSBuffer(MsgBuffer *buffer) = 0;
+    // ---- 由传输层转发 ----
+    void handleRecv(const toolkit::Buffer::Ptr &buf);
+    void handleClose(const toolkit::SockException &ex);
+    void handleWriteComplete();
+    void handleManagerTick();
+
+  private:
+    // 锁 helper_ 返回 SSL_Box（可能为 nullptr）
+    toolkit::SSL_Box *sslBox() const;
+
+    // 触发关闭流程（poller 线程）
+    void fireCloseInLoop(const toolkit::SockException &ex);
+
+    std::weak_ptr<toolkit::SocketHelper> helper_;
+    std::shared_ptr<toolkit::Socket> sock_;
+    std::shared_ptr<toolkit::EventPoller> loop_;
+    InetAddress localAddr_;
+    InetAddress peerAddr_;
+    trantor::MsgBuffer readBuffer_;
+    std::atomic_bool connected_{false};
+    std::atomic_bool closed_{false};
+
+    // size_t bytesSent_{0};
+    // size_t bytesReceived_{0};
+
+    // high water mark
+    size_t highWaterMark_{0};
+    bool highWaterMarkFired_{false};
+
+    // idle kickoff
+    size_t idleTimeout_{60 * 1000};
+    toolkit::Ticker lastActivityTick_{};
+    bool keepAlive_{false};
+    bool disableKickoff_{false};
+
+    // 挂起的 file/stream/asyncStream 生产者
+    struct PendingProducer;
+    std::shared_ptr<PendingProducer> pendingProducer_;
 
   protected:
     // callbacks
@@ -387,6 +290,6 @@ class ZLTOOLKIT_EXPORT TcpConnection
     std::shared_ptr<void> contextPtr_;
 };
 ZLTOOLKIT_EXPORT SSLContextPtr newSSLContext(const TLSPolicy &policy,
-                                           bool server);
+                                             bool server);
 
 }  // namespace trantor

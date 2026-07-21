@@ -23,6 +23,7 @@
 #ifdef _WIN32
 #include <winsock2.h>
 #include <time.h>
+#include <chrono>
 #endif
 
 namespace trantor
@@ -30,38 +31,20 @@ namespace trantor
 #ifdef _WIN32
 int gettimeofday(timeval *tp, void *tzp)
 {
-    time_t clock;
-    struct tm tm;
-    SYSTEMTIME wtm;
-
-    GetLocalTime(&wtm);
-    tm.tm_year = wtm.wYear - 1900;
-    tm.tm_mon = wtm.wMonth - 1;
-    tm.tm_mday = wtm.wDay;
-    tm.tm_hour = wtm.wHour;
-    tm.tm_min = wtm.wMinute;
-    tm.tm_sec = wtm.wSecond;
-    tm.tm_isdst = -1;
-    clock = mktime(&tm);
-    tp->tv_sec = static_cast<long>(clock);
-    tp->tv_usec = wtm.wMilliseconds * 1000;
-
-    return (0);
+    auto now_stamp = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::system_clock::now().time_since_epoch()
+    ).count();
+    tp->tv_sec = static_cast<long>(now_stamp / 1000000LL);
+    tp->tv_usec = static_cast<long>(now_stamp % 1000000LL);
+    return 0;
 }
 #endif
 const Date Date::date()
 {
-#ifndef _WIN32
     struct timeval tv;
     gettimeofday(&tv, NULL);
     int64_t seconds = tv.tv_sec;
     return Date(seconds * MICRO_SECONDS_PER_SEC + tv.tv_usec);
-#else
-    timeval tv;
-    gettimeofday(&tv, NULL);
-    int64_t seconds = tv.tv_sec;
-    return Date(seconds * MICRO_SECONDS_PER_SEC + tv.tv_usec);
-#endif
 }
 
 int64_t Date::timezoneOffset()

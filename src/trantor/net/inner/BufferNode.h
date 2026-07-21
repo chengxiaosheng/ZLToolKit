@@ -16,12 +16,11 @@
 #ifdef _WIN32
 #include <stdio.h>
 #endif
+#include <trantor/utils/MsgBuffer.h>
 #include <Util/logger.h>
-#include <Util/util.h>
 #include <functional>
 #include <memory>
 #include <string>
-#include <trantor/utils/MsgBuffer.h>
 
 namespace trantor
 {
@@ -47,6 +46,15 @@ class BufferNode : public toolkit::noncopyable
     }
     virtual void retrieve(size_t len) = 0;
     virtual long long remainingBytes() const = 0;
+    size_t size() const {
+        return remainingBytes();
+    }
+    const char * data() {
+        const char * data = nullptr;
+        size_t len;
+        getData(data, len);
+        return data;
+    }
     virtual int getFd() const
     {
         ErrorL << "Not a file buffer node";

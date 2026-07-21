@@ -7,122 +7,69 @@
 
 // Author: Shuo Chen (chenshuo at chenshuo dot com)
 //
-// This is a public header file, it must only include public header files.
-
 // Copyright 2016, Tao An.  All rights reserved.
 //
-// Use of this source code is governed by a BSD-style license
-// that can be found in the License file.
-
-// Author: Tao An
+// 重写为具体类：trantor::TcpClient = HttpClientConn。
+// 继承 toolkit::TcpClient，在 onConnect 成功时创建 trantor::TcpConnection
+// 并经 set_session 绑定自身。TLS 由 toolkit::TcpClientWithTLSPolicy<trantor::TcpClient>
+// 包装（wrapper IS-A trantor::TcpClient），enableSSL 经虚 setTLSPolicy 派发。
 
 #pragma once
 #include <Poller/EventPoller.h>
+#include <Network/TcpClient.h>     // toolkit::TcpClient
 #include <trantor/net/InetAddress.h>
 #include <trantor/net/TcpConnection.h>
+#include <trantor/net/callbacks.h>
 #include <functional>
-#include <thread>
 #include <atomic>
-#include <signal.h>
+#include <mutex>
+#include <string>
+#include <vector>
+
 namespace trantor
 {
-class Connector;
-using ConnectorPtr = std::shared_ptr<Connector>;
 /**
  * @brief This class represents a TCP client.
  *
+ * 具体类：继承 toolkit::TcpClient，连接成功后创建 trantor::TcpConnection。
+ * TLS：实例化 toolkit::TcpClientWithTLSPolicy<trantor::TcpClient>（一类型，
+ * 非 TLS 时 box 为空，明文直通）。
  */
-class ZLTOOLKIT_EXPORT TcpClient : toolkit::noncopyable,
-                                 public std::enable_shared_from_this<TcpClient>
+class ZLTOOLKIT_EXPORT TcpClient : public toolkit::TcpClient
 {
   public:
-    /**
-     * @brief Construct a new TCP client instance.
-     *
-     * @param loop The event loop in which the client runs.
-     * @param serverAddr The address of the server.
-     * @param nameArg The name of the client.
-     */
     TcpClient(const std::shared_ptr<toolkit::EventPoller> &loop,
               const InetAddress &serverAddr,
               const std::string &nameArg);
-    ~TcpClient();
+    ~TcpClient() override;
 
-    /**
-     * @brief Connect to the server.
-     *
-     */
+    /// @brief Connect to the server.
     void connect();
 
-    /**
-     * @brief Disconnect from the server.
-     *
-     */
+    /// @brief Disconnect (half-close the connection).
     void disconnect();
 
-    /**
-     * @brief Stop connecting to the server.
-     *
-     */
+    /// @brief Stop connecting / tear down.
     void stop();
 
-    /**
-     * @brief Get the TCP connection to the server.
-     *
-     * @return TcpConnectionPtr
-     */
+    /// @brief Get the TCP connection (nullptr until connected).
     TcpConnectionPtr connection() const
     {
         std::lock_guard<std::mutex> lock(mutex_);
         return connection_;
     }
 
-    /**
-     * @brief Get the event loop.
-     *
-     * @return EventLoop*
-     */
     std::shared_ptr<toolkit::EventPoller> getLoop() const
     {
-        return loop_;
+        return getPoller();
     }
 
-    /**
-     * @brief Check whether the client re-connect to the server.
-     *
-     * @return true
-     * @return false
-     */
-    bool retry() const
-    {
-        return retry_;
-    }
+    bool retry() const { return retry_; }
+    void enableRetry() { retry_ = true; }
 
-    /**
-     * @brief Enable retrying.
-     *
-     */
-    void enableRetry()
-    {
-        retry_ = true;
-    }
+    const std::string &name() const { return name_; }
 
-    /**
-     * @brief Get the name of the client.
-     *
-     * @return const std::string&
-     */
-    const std::string &name() const
-    {
-        return name_;
-    }
-
-    /**
-     * @brief Set the connection callback.
-     *
-     * @param cb The callback is called when the connection to the server is
-     * established or closed.
-     */
+    // ---- 回调设置 ----
     void setConnectionCallback(const ConnectionCallback &cb)
     {
         connectionCallback_ = cb;
@@ -131,24 +78,10 @@ class ZLTOOLKIT_EXPORT TcpClient : toolkit::noncopyable,
     {
         connectionCallback_ = std::move(cb);
     }
-
-    /**
-     * @brief Set the connection error callback.
-     *
-     * @param cb The callback is called when an error occurs during connecting
-     * to the server.
-     */
     void setConnectionErrorCallback(const ConnectionErrorCallback &cb)
     {
         connectionErrorCallback_ = cb;
     }
-
-    /**
-     * @brief Set the message callback.
-     *
-     * @param cb The callback is called when some data is received from the
-     * server.
-     */
     void setMessageCallback(const RecvMessageCallback &cb)
     {
         messageCallback_ = cb;
@@ -157,15 +90,6 @@ class ZLTOOLKIT_EXPORT TcpClient : toolkit::noncopyable,
     {
         messageCallback_ = std::move(cb);
     }
-    /// Set write complete callback.
-    /// Not thread safe.
-
-    /**
-     * @brief Set the write complete callback.
-     *
-     * @param cb The callback is called when data to send is written to the
-     * socket.
-     */
     void setWriteCompleteCallback(const WriteCompleteCallback &cb)
     {
         writeCompleteCallback_ = cb;
@@ -174,11 +98,6 @@ class ZLTOOLKIT_EXPORT TcpClient : toolkit::noncopyable,
     {
         writeCompleteCallback_ = std::move(cb);
     }
-
-    /**
-     * @brief Set the callback for errors of SSL
-     * @param cb The callback is called when an SSL error occurs.
-     */
     void setSSLErrorCallback(const SSLErrorCallback &cb)
     {
         sslErrorCallback_ = cb;
@@ -187,30 +106,24 @@ class ZLTOOLKIT_EXPORT TcpClient : toolkit::noncopyable,
     {
         sslErrorCallback_ = std::move(cb);
     }
+    void setSockOptCallback(const SockOptCallback &cb)
+    {
+        sockOptCallback_ = cb;
+    }
+    void setSockOptCallback(SockOptCallback &&cb)
+    {
+        sockOptCallback_ = std::move(cb);
+    }
 
     /**
-     * @brief Set the callback for set socket option
-     * @param cb The callback is called, before connect
+     * @brief TLS 策略派发（base 无操作；TcpClientWithTLSPolicy 模板 override）。
+     * enableSSL(TLSPolicyPtr) 经此虚函数把策略传给 TLS 包装器。
      */
-    void setSockOptCallback(const SockOptCallback &cb);
-    void setSockOptCallback(SockOptCallback &&cb);
+    virtual void setTLSPolicy(TLSPolicyPtr policy)
+    {
+        (void)policy;
+    }
 
-    /**
-     * @brief Enable SSL encryption.
-     * @param useOldTLS If true, the TLS 1.0 and 1.1 are supported by the
-     * client.
-     * @param validateCert If true, we try to validate if the peer's SSL cert
-     * is valid.
-     * @param hostname The server hostname for SNI. If it is empty, the SNI is
-     * not used.
-     * @param sslConfCmds The commands used to call the SSL_CONF_cmd function in
-     * OpenSSL.
-     * @param certPath The path of the certificate file.
-     * @param keyPath The path of the private key file.
-     * @param caPath The path of the certificate authority file.
-     * @note It's well known that TLS 1.0 and 1.1 are not considered secure in
-     * 2020. And it's a good practice to only use TLS 1.2 and above.
-     */
     [[deprecated("Use enableSSL(TLSPolicyPtr policy) instead")]] void enableSSL(
         bool useOldTLS = false,
         bool validateCert = true,
@@ -220,50 +133,52 @@ class ZLTOOLKIT_EXPORT TcpClient : toolkit::noncopyable,
         const std::string &certPath = "",
         const std::string &keyPath = "",
         const std::string &caPath = "");
-    /**
-     * @brief Enable SSL encryption.
-     */
+
+    /// @brief Enable SSL encryption with a TLSPolicy.
     void enableSSL(TLSPolicyPtr policy)
     {
         tlsPolicyPtr_ = std::move(policy);
-        sslContextPtr_ = newSSLContext(*tlsPolicyPtr_, false);
+        setTLSPolicy(tlsPolicyPtr_);  // 虚派发 -> TLS 包装器
+    }
+
+  protected:
+    // ---- toolkit::TcpClient 回调 ----
+    void onConnect(const toolkit::SockException &ex) override;
+    void onRecv(const toolkit::Buffer::Ptr &buf) override
+    {
+        if (connection_)
+            connection_->handleRecv(buf);
+    }
+    void onError(const toolkit::SockException &ex) override;
+    void onFlush() override
+    {
+        if (connection_)
+            connection_->handleWriteComplete();
     }
 
   private:
-    /// Not thread safe, but in loop
-    void newConnection(int sockfd);
-    /// Not thread safe, but in loop
     void removeConnection(const TcpConnectionPtr &conn);
+    void retryInLoop();
 
     std::shared_ptr<toolkit::EventPoller> loop_;
-    ConnectorPtr connector_;  // avoid revealing Connector
+    InetAddress serverAddr_;
     const std::string name_;
+
     ConnectionCallback connectionCallback_;
     ConnectionErrorCallback connectionErrorCallback_;
     RecvMessageCallback messageCallback_;
     WriteCompleteCallback writeCompleteCallback_;
     SSLErrorCallback sslErrorCallback_;
-    std::atomic_bool retry_;    // atomic
-    std::atomic_bool connect_;  // atomic
-    // always in loop thread
+    SockOptCallback sockOptCallback_;
+
+    std::atomic_bool retry_{false};
+    std::atomic_bool connect_{false};
+    float connectTimeout_{30.0f};
+    int retryDelayMs_{3000};
+
     mutable std::mutex mutex_;
     TcpConnectionPtr connection_;  // @GuardedBy mutex_
     TLSPolicyPtr tlsPolicyPtr_;
-    SSLContextPtr sslContextPtr_;
-    bool validateCert_{false};
-
-#ifndef _WIN32
-    class IgnoreSigPipe
-    {
-      public:
-        IgnoreSigPipe()
-        {
-            ::signal(SIGPIPE, SIG_IGN);
-        }
-    };
-
-    static IgnoreSigPipe initObj;
-#endif
 };
 
 }  // namespace trantor

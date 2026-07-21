@@ -1,6 +1,8 @@
+#include "Util/logger.h"
+
+#include <fileapi.h>
 #include <trantor/net/inner/BufferNode.h>
 #include <windows.h>
-#include <fileapi.h>
 #if defined(WINAPI_FAMILY) && (WINAPI_FAMILY == WINAPI_FAMILY_APP)
 #define UWP 1
 #else
@@ -117,7 +119,7 @@ class FileBufferNode : public BufferNode
             }
             else if (n == 0)
             {
-                ErrorL << "Read the end of file.";
+                TraceL << "Read the end of file.";
             }
             else
             {

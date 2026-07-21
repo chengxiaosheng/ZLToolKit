@@ -64,17 +64,21 @@ EventPoller &EventPoller::Instance() {
 }
 
 void EventPoller::addEventPipe() {
-    SockUtil::setNoBlocked(_pipe.readFD());
-    SockUtil::setNoBlocked(_pipe.writeFD());
+    if (!_pipe)
+    {
+        _pipe = make_shared<PipeWrap>();
+    }
+    SockUtil::setNoBlocked(_pipe->readFD());
+    SockUtil::setNoBlocked(_pipe->writeFD());
 
     // 添加内部管道事件  [AUTO-TRANSLATED:6a72e39a]
     //Add internal pipe event
-    if (addEvent(_pipe.readFD(), EventPoller::Event_Read, [this](int event) { onPipeEvent(); }) == -1) {
+    if (addEvent(_pipe->readFD(), EventPoller::Event_Read, [this](int event) { onPipeEvent(); }) == -1) {
         throw std::runtime_error("Add pipe fd to poller failed");
     }
 }
 
-EventPoller::EventPoller(std::string name, uint32_t index): _index(index) {
+EventPoller::EventPoller(std::string name, uint32_t index): _pipe(std::make_shared<PipeWrap>()), _index(index) {
 #if defined(HAS_EPOLL) || defined(HAS_KQUEUE)
     _event_fd = create_event();
     if (_event_fd == INVALID_EVENT_FD) {
@@ -293,7 +297,9 @@ Task::Ptr EventPoller::async_l(TaskIn task, bool may_sync, bool first) {
     }
     //写数据到管道,唤醒主线程  [AUTO-TRANSLATED:2ead8182]
     //Write data to the pipe and wake up the main thread
-    _pipe.write("", 1);
+    if (_pipe) {
+        _pipe->write("", 1);
+    }
     return ret;
 }
 
@@ -306,7 +312,7 @@ inline void EventPoller::onPipeEvent(bool flush) {
     int err = 0;
     if (!flush) {
        for (;;) {
-         if ((err = _pipe.read(buf, sizeof(buf))) > 0) {
+         if ((err = _pipe->read(buf, sizeof(buf))) > 0) {
              // 读到管道数据,继续读,直到读空为止  [AUTO-TRANSLATED:47bd325c]
              //Read data from the pipe, continue reading until it's empty
              continue;
@@ -315,8 +321,8 @@ inline void EventPoller::onPipeEvent(bool flush) {
              // 收到eof或非EAGAIN(无更多数据)错误,说明管道无效了,重新打开管道  [AUTO-TRANSLATED:5f7a013d]
              //Received eof or non-EAGAIN (no more data) error, indicating that the pipe is invalid, reopen the pipe
              ErrorL << "Invalid pipe fd of event poller, reopen it";
-             delEvent(_pipe.readFD());
-             _pipe.reOpen();
+             delEvent(_pipe->readFD());
+             _pipe->reOpen();
              addEventPipe();
          }
          break;
@@ -362,9 +368,13 @@ const std::string& EventPoller::getThreadName() const {
     return _name;
 }
 void EventPoller::runOnQuit(std::function<void()> cb) {
-    auto self  = shared_from_this();
-    async([cb = std::forward<decltype(cb)>(cb), self]() mutable {
-        self->_exit_callbacks.push_back(std::move(cb));
+    auto weak_self = std::weak_ptr<EventPoller>(shared_from_this());
+    async([cb = std::forward<decltype(cb)>(cb), weak_self]() mutable {
+        if (auto strong_self = weak_self.lock()) {
+            strong_self->_exit_callbacks.push_back(std::move(cb));
+        } else {
+            cb();
+        }
     });
 }
 

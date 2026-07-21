@@ -22,6 +22,7 @@
 #include "ResourcePool.h"
 #include "toolkit/exports.h"
 #include "SSLUtil.h"
+#include "trantor/net/callbacks.h"
 
 typedef struct x509_st X509;
 typedef struct evp_pkey_st EVP_PKEY;
@@ -267,11 +268,37 @@ public:
      */
     bool hasCustomCtx() const { return (bool)_custom_ctx; }
 
+    /**
+     * 设置 SSL 错误回调 (握手失败/协议错误/证书校验失败)
+     * 当 SSL_Box 在握手或读写过程中检测到不可恢复的错误时触发
+     */
+    void setOnErr(const std::function<void(trantor::SSLError)> &cb);
+
+    /**
+     * 获取对端证书 (返回一个新的引用，调用方负责释放)
+     * @return X509 智能指针，无证书时返回 nullptr
+     */
+    std::shared_ptr<X509> getPeerCertificate() const;
+
+    /**
+     * 获取 SNI 名称 (server 端: 客户端通过 SNI 提供的 hostname)
+     * @return SNI 名称，无则返回空串
+     */
+    std::string getSNIName() const;
+
+    /**
+     * 获取协商的应用层协议 (ALPN)
+     * @return 协议名 (如 "h2", "http/1.1")，无则返回空串
+     */
+    std::string getApplicationProtocol() const;
+
 private:
     void flushWriteBio();
     void flushReadBio();
     // 使用自定义上下文初始化 SSL
     void initFromCustomCtx();
+    // 检测并触发 SSL 错误回调
+    void notifyError(int sslError = -1);
 
 private:
     bool _server_mode;
@@ -286,6 +313,7 @@ private:
     ResourcePool <BufferRaw> _buffer_pool;
     std::function<void(const Buffer::Ptr &)> _on_dec;
     std::function<void(const Buffer::Ptr &)> _on_enc;
+    std::function<void(trantor::SSLError)> _on_err;
 };
 
 /**

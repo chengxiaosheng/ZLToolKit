@@ -13,8 +13,7 @@
  */
 
 #pragma once
-#include "Buffer.h"
-
+#include <Network/Buffer.h>
 #include <Util/util.h>
 #include <algorithm>
 #include <assert.h>
@@ -56,6 +55,32 @@ class ZLTOOLKIT_EXPORT MsgBuffer: public toolkit::Buffer
      * @param len The initial size of the buffer.
      */
     explicit MsgBuffer(size_t len = TRANTOR_BUFFER_DEFAULT_LENGTH);
+
+    /**
+     * @brief 拷贝构造（MsgBuffer 继承 noncopyable Buffer，但 drogon 依赖拷贝语义，
+     *        故显式提供：拷贝内部 vector 与读写指针）。
+     */
+    MsgBuffer(const MsgBuffer &other)
+        : head_(other.head_),
+          initCap_(other.initCap_),
+          buffer_(other.buffer_),
+          tail_(other.tail_)
+    {
+    }
+    MsgBuffer(MsgBuffer && other) noexcept;
+
+    MsgBuffer &operator=(const MsgBuffer &other)
+    {
+        if (this != &other)
+        {
+            head_ = other.head_;
+            initCap_ = other.initCap_;
+            buffer_ = other.buffer_;
+            tail_ = other.tail_;
+        }
+        return *this;
+    }
+    // 注意：不提供移动构造/赋值（Buffer 基类 noncopyable 且不可移动）。
 
     /**
      * @brief Get the beginning of the buffer.

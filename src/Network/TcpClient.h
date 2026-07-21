@@ -193,6 +193,8 @@ public:
 
     bool overSsl() const override { return (bool)_ssl_box; }
 
+    SSL_Box *getSSLBox() override { return _ssl_box.get(); }
+
 protected:
     void onConnect(const SockException &ex) override {
         if (!ex) {
@@ -258,6 +260,7 @@ public:
      */
     void setTLSPolicy(trantor::TLSPolicyPtr policy) {
         _user_policy = std::move(policy);
+        _tls_requested = true;
     }
 
     /**
@@ -267,6 +270,7 @@ public:
      */
     void setSSLBox(std::shared_ptr<SSL_Box> ssl_box) {
         _ssl_box = std::move(ssl_box);
+        _tls_requested = true;
     }
 
     /**
@@ -325,6 +329,8 @@ public:
 
     bool overSsl() const override { return (bool)_ssl_box; }
 
+    SSL_Box *getSSLBox() override { return _ssl_box.get(); }
+
 protected:
     void onConnect(const toolkit::SockException &ex) override {
         if (!ex) {
@@ -377,7 +383,11 @@ private:
             return;
         }
 
-        // 优先级4: 回退到全局 SSL_Initor 方式
+        // 优先级4: 仅当 TLS 被请求时才回退到全局 SSL_Initor 方式
+        // 否则保持 _ssl_box 为空 -> 明文 TCP 穿过同一包装器正常工作
+        if (!_tls_requested) {
+            return;
+        }
         _ssl_box = std::make_shared<SSL_Box>(false);
         setupCallbacks();
         setupSNI();
@@ -402,6 +412,7 @@ private:
     uint16_t _target_port = 0;
     std::string _protocol;
     trantor::TLSPolicyPtr _user_policy;  // 用户手动设置的策略
+    bool _tls_requested{false};          // 是否请求了 TLS (setTLSPolicy/setSSLBox 置位)
     std::shared_ptr<SSL_Box> _ssl_box;
 };
 

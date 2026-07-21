@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include "util.h"
-
+#include <Util/util.h>
+#include <Network/Buffer.h>
 #include <memory>
 
 namespace trantor
@@ -29,16 +29,19 @@ class ZLTOOLKIT_EXPORT AsyncStream : public toolkit::noncopyable
 {
   public:
     virtual ~AsyncStream() = default;
-    /**
-     * @brief Send data asynchronously.
-     *
-     * @param data The data to be sent
-     * @param len The length of the data
-     * @return true if the data is sent successfully or at least is put in the
-     * send buffer.
-     * @return false if the connection is closed.
-     */
-    virtual bool send(const char *data, size_t len) = 0;
+
+    virtual bool send(const std::shared_ptr<toolkit::Buffer> &buffer) = 0;
+
+    bool send(const char *data, size_t len) {
+        std::shared_ptr<toolkit::BufferRaw> buffer = nullptr;
+        if (data && len) {
+            buffer = toolkit::BufferRaw::create(len);
+            buffer->assign(data, len);
+        }
+        return send(buffer);
+    }
+
+
     bool send(const std::string &data)
     {
         return send(data.data(), data.length());

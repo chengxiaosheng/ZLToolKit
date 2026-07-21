@@ -63,6 +63,8 @@ public:
         Event_LT = 1 << 3, // 水平触发
     } Poll_Event;
 
+    class ExitException : public std::exception {};
+
     ~EventPoller();
 
     /**
@@ -290,8 +292,6 @@ private:
 
 
 
-private:
-    class ExitException : public std::exception {};
 
 private:
     // 标记loop线程是否退出  [AUTO-TRANSLATED:98250f84]
@@ -320,7 +320,7 @@ private:
     // 内部事件管道  [AUTO-TRANSLATED:dc1d3a93]
     // 内部事件管道
     // Internal event pipe
-    PipeWrap _pipe;
+    std::shared_ptr<PipeWrap> _pipe{nullptr};
     // 从其他线程切换过来的任务  [AUTO-TRANSLATED:d16917d6]
     // 从其他线程切换过来的任务
     // Tasks switched from other threads

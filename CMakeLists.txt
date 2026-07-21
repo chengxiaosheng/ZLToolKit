@@ -170,6 +170,7 @@ set(ZLToolKit_SOURCES
 
         ${CMAKE_CURRENT_SOURCE_DIR}/src/trantor/net/InetAddress.cc
         ${CMAKE_CURRENT_SOURCE_DIR}/src/trantor/net/Channel.cc
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/trantor/net/Certificate.cc
         ${CMAKE_CURRENT_SOURCE_DIR}/src/trantor/net/TcpConnection.cc
         ${CMAKE_CURRENT_SOURCE_DIR}/src/trantor/net/TcpClient.cc
 
@@ -234,6 +235,7 @@ set(win32_public_header)
 set(trantor_public_header
         ${CMAKE_CURRENT_SOURCE_DIR}/src/trantor/net/AsyncStream.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/trantor/net/callbacks.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/trantor/net/Certificate.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/trantor/net/Channel.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/trantor/net/InetAddress.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/trantor/net/TcpClient.h
@@ -262,6 +264,9 @@ elseif (WIN32)
             ${CMAKE_CURRENT_SOURCE_DIR}/src/win32/wepoll.h
     )
     list(APPEND ZLToolKit_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/trantor/net/inner/FileBufferNodeWin.cc)
+    list(APPEND ZLToolKit_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/trantor/utils/WindowsSupport.cc)
+
+
 else ()
     list(APPEND ZLToolKit_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/trantor/net/inner/FileBufferNodeUnix.cc)
 endif ()
@@ -271,10 +276,10 @@ if (c-ares_FOUND)
     message(STATUS "c-ares found!")
     list(APPEND ZLToolKit_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/trantor/net/inner/AresResolver.cc)
     list(APPEND trantor_private_header ${CMAKE_CURRENT_SOURCE_DIR}/src/trantor/net/inner/AresResolver.h)
-    if (NOT BUILD_SHARED_LIBS)
-        target_compile_definitions(${PROJECT_NAME} PRIVATE CARES_STATICLIB)
-    endif ()
-    target_link_libraries(${PROJECT_NAME} PRIVATE c-ares_lib)
+#    if (NOT BUILD_SHARED_LIBS)
+#        target_compile_definitions(${PROJECT_NAME} PRIVATE CARES_STATICLIB)
+#    endif ()
+    target_link_libraries(${PROJECT_NAME} PRIVATE c-ares::cares)
     if (APPLE)
         target_link_libraries(${PROJECT_NAME} PRIVATE resolv)
     endif ()

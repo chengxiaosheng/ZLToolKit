@@ -420,7 +420,7 @@ std::shared_ptr<SSL_CTX> SSLUtil::makeSSLContext(const trantor::TLSPolicy &polic
 
     // Load certificate and private key if provided
     if (!policy.getCertPath().empty() && !policy.getKeyPath().empty()) {
-        if (SSL_CTX_use_certificate_chain_file(ctx, policy.getCertPath().c_str(), SSL_FILETYPE_PEM) != 1) {
+        if (SSL_CTX_use_certificate_chain_file(ctx, policy.getCertPath().c_str()) != 1) {
             WarnL << "SSL_CTX_use_certificate_chain_file failed: " << getLastError();
             SSL_CTX_free(ctx);
             return nullptr;
@@ -486,11 +486,93 @@ std::shared_ptr<SSL_CTX> SSLUtil::makeSSLContext(const trantor::TLSPolicy &polic
         loadDefaultCAs(ctx);
     }
 
-    // Apply SSL conf commands if provided
-    for (const auto &cmd : policy.getConfCmds()) {
-        if (SSL_CTX_ctrl(ctx, SSL_CTRL_SET_TMP_DH, 0, nullptr) == 0) {
-            // Skip, this is just an example - actual implementation would need
-            // to map command names to SSL_CTX_ctrl operations
+    // Apply SSL conf commands (OpenSSL SSL_CONF_cmd) if provided
+    if (!policy.getConfCmds().empty()) {
+        SSL_CONF_CTX *cctx = SSL_CONF_CTX_new();
+        if (cctx) {
+            SSL_CONF_CTX_set_flags(cctx,
+                                   SSL_CONF_FLAG_FILE | SSL_CONF_FLAG_SERVER |
+                                       SSL_CONF_FLAG_CLIENT |
+                                       SSL_CONF_FLAG_CERTIFICATE |
+                                       SSL_CONF_FLAG_SHOW_ERRORS);
+            SSL_CONF_CTX_set_ssl_ctx(cctx, ctx);
+            for (const auto &cmd : policy.getConfCmds()) {
+                if (SSL_CONF_cmd(cctx, cmd.first.c_str(), cmd.second.c_str()) <= 0) {
+                    WarnL << "SSL_CONF_cmd failed: " << cmd.first << "="
+                          << cmd.second << " : " << getLastError();
+                }
+            }
+            if (SSL_CONF_CTX_finish(cctx) <= 0) {
+                WarnL << "SSL_CONF_CTX_finish failed: " << getLastError();
+            }
+            SSL_CONF_CTX_free(cctx);
+        }
+    }
+
+    // Apply ALPN if provided
+    if (!policy.getAlpnProtocols().empty()) {
+        // Build wire format: sequence of (1-byte length + protocol name)
+        std::string alpnWire;
+        for (const auto &proto : policy.getAlpnProtocols()) {
+            if (proto.size() > 255) {
+                WarnL << "ALPN protocol name too long, skipped: " << proto;
+                continue;
+            }
+            alpnWire.push_back(static_cast<char>(proto.size()));
+            alpnWire.append(proto);
+        }
+        if (!alpnWire.empty()) {
+            if (serverMode) {
+                // server: register selection callback; alpnData freed via ex_data
+                auto *alpnData = new std::string(std::move(alpnWire));
+                SSL_CTX_set_alpn_select_cb(
+                    ctx,
+                    [](SSL *ssl, const unsigned char **out, unsigned char *outlen,
+                       const unsigned char *in, unsigned int inlen,
+                       void *arg) -> int {
+                        auto *data = static_cast<std::string *>(arg);
+                        const char *p = data->data();
+                        const char *end = p + data->size();
+                        // Select the first server-configured protocol that the
+                        // client also advertised
+                        while (p < end) {
+                            unsigned char l = static_cast<unsigned char>(*p);
+                            p++;
+                            if (p + l > end) break;
+                            const unsigned char *cp = in;
+                            while (cp + 1 <= in + inlen) {
+                                unsigned char cl = cp[0];
+                                if (cp + 1 + cl > in + inlen) break;
+                                if (cl == l && memcmp(cp + 1, p, l) == 0) {
+                                    *out = cp + 1;
+                                    *outlen = cl;
+                                    return SSL_TLSEXT_ERR_OK;
+                                }
+                                cp += 1 + cl;
+                            }
+                            p += l;
+                        }
+                        // No match: continue without ALPN (lenient for HTTP/1.1)
+                        return SSL_TLSEXT_ERR_NOACK;
+                    },
+                    alpnData);
+                // Associate alpnData with ctx so it is freed when ctx is destroyed
+                static const int kAlpnExIdx = SSL_CTX_get_ex_new_index(
+                    0, nullptr, nullptr, nullptr,
+                    [](void * /*parent*/, void *ptr, CRYPTO_EX_DATA * /*ad*/,
+                       int /*idx*/, long /*argl*/, void * /*argp*/) {
+                        delete static_cast<std::string *>(ptr);
+                    });
+                SSL_CTX_set_ex_data(ctx, kAlpnExIdx, alpnData);
+            } else {
+                // client: SSL_CTX_set_alpn_protos copies the data internally
+                if (SSL_CTX_set_alpn_protos(
+                        ctx,
+                        reinterpret_cast<const unsigned char *>(alpnWire.data()),
+                        static_cast<unsigned int>(alpnWire.size())) != 0) {
+                    WarnL << "SSL_CTX_set_alpn_protos failed: " << getLastError();
+                }
+            }
         }
     }
 

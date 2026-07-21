@@ -26,6 +26,8 @@
 
 namespace toolkit {
 
+class SSL_Box;
+
 #if defined(MSG_NOSIGNAL)
 #define FLAG_NOSIGNAL MSG_NOSIGNAL
 #else
@@ -985,10 +987,16 @@ public:
     /**
      * 是否ssl加密
      * Whether SSL encryption is enabled
-     
+
      * [AUTO-TRANSLATED:95b748f2]
      */
     virtual bool overSsl() const { return false; }
+
+    /**
+     * 获取关联的 SSL_Box (若本对象为 TLS 包装的 Session/Client)，否则 nullptr
+     * 供 trantor::TcpConnection 查询对端证书/SNI/ALPN 等
+     */
+    virtual SSL_Box *getSSLBox() { return nullptr; }
 
     ///////////////////// SockInfo override /////////////////////
     std::string get_local_ip() override;

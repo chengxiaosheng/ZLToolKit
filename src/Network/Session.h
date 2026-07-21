@@ -82,6 +82,8 @@ public:
 
     bool overSsl() const override { return true; }
 
+    SSL_Box *getSSLBox() override { return &_ssl_box; }
+
 protected:
     ssize_t send(Buffer::Ptr buf) override {
         auto size = buf->size();
@@ -139,6 +141,8 @@ public:
     }
 
     bool overSsl() const override { return true; }
+
+    SSL_Box *getSSLBox() override { return _ssl_box.get(); }
 
     // 供lambda访问protected方法
     inline void public_onRecv(const Buffer::Ptr &buf) {

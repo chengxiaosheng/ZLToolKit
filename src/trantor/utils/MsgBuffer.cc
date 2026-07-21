@@ -36,6 +36,14 @@ MsgBuffer::MsgBuffer(size_t len)
 {
 }
 
+MsgBuffer::MsgBuffer(MsgBuffer &&other) noexcept
+    : head_(other.head_),
+          initCap_(other.initCap_),
+          buffer_(std::move(other.buffer_)),
+          tail_(other.tail_) {
+    other.head_ = other.tail_ = kBufferOffset;
+}
+
 void MsgBuffer::ensureWritableBytes(size_t len)
 {
     if (writableBytes() >= len)

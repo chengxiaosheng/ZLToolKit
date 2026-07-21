@@ -325,10 +325,10 @@ void SysLogChannel::write(const Logger &logger, const LogContextPtr &ctx) {
     }
     static int s_syslog_lev[10];
     static onceToken s_token([]() {
-        s_syslog_lev[LTrace] = DebugL;
-        s_syslog_lev[LDebug] = InfoL;
+        s_syslog_lev[LTrace] = LOG_DEBUG;
+        s_syslog_lev[LDebug] = LOG_INFO;
         s_syslog_lev[LInfo] = LOG_NOTICE;
-        s_syslog_lev[LWarn] = WarnLING;
+        s_syslog_lev[LWarn] = LOG_WARNING;
         s_syslog_lev[LError] = LOG_ERR;
     }, nullptr);
 

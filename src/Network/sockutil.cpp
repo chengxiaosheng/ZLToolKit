@@ -28,13 +28,28 @@ using namespace std;
 namespace toolkit {
 
 #if defined(_WIN32)
-static onceToken g_token([]() {
-    WORD wVersionRequested = MAKEWORD(2, 2);
-    WSADATA wsaData;
-    WSAStartup(wVersionRequested, &wsaData);
-}, []() {
-    WSACleanup();
+// static onceToken g_token([]() {
+//     WORD wVersionRequested = MAKEWORD(2, 2);
+//     WSADATA wsaData;
+//     WSAStartup(wVersionRequested, &wsaData);
+// }, []() {
+//     WSACleanup();
+// });
+
+static onceToken &getWinsockInitToken() {
+    static onceToken token([]() {
+        WORD wVersionRequested = MAKEWORD(2, 2);
+        WSADATA wsaData;
+        WSAStartup(wVersionRequested, &wsaData);
+    }, []() {
+        WSACleanup();
+    });
+    return token;
+}
+static onceToken token2([]() {
+    getWinsockInitToken();
 });
+
 int ioctl(int fd, long cmd, u_long *ptr) {
     return ioctlsocket(fd, cmd, ptr);
 }
@@ -509,6 +524,10 @@ int SockUtil::connect(const char *host, uint16_t port, bool async, const char *l
 }
 
 int SockUtil::listen(const uint16_t port, const char *local_ip, int back_log) {
+#ifdef WIN32
+    getWinsockInitToken();
+#endif
+
     int fd = -1;
     int family = support_ipv6() ? (is_ipv4(local_ip) ? AF_INET : AF_INET6) : AF_INET;
     if ((fd = (int)socket(family, SOCK_STREAM, IPPROTO_TCP)) == -1) {
@@ -810,6 +829,9 @@ vector<map<string, string> > SockUtil::getInterfaceList() {
 }
 
 int SockUtil::bindUdpSock(const uint16_t port, const char *local_ip, bool enable_reuse) {
+#ifdef WIN32
+    getWinsockInitToken();
+#endif
     int fd = -1;
     int family = support_ipv6() ? (is_ipv4(local_ip) ? AF_INET : AF_INET6) : AF_INET;
     if ((fd = (int)socket(family, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
