@@ -13,11 +13,11 @@
 #include "utils/Utilities.h"
 
 #include <Network/Buffer.h>      // BufferRaw, BufferString, BufferOffset
-#include <Network/sockutil.h>    // SockUtil::setNoDelay
 #include <Poller/EventPoller.h>
 #include <Util/SSLBox.h>
 #include <Util/logger.h>
 #include <Util/util.h>
+#include <trantor/net/ParseCursor.h>
 
 #include <atomic>
 #include <chrono>
@@ -108,20 +108,6 @@ std::string TcpConnection::applicationProtocol() const
     return box ? box->getApplicationProtocol() : std::string();
 }
 
-void TcpConnection::startEncryption(TLSPolicyPtr /*policy*/,
-                                    bool /*isServer*/,
-                                    std::function<void(
-                                        const TcpConnectionPtr &)> /*cb*/)
-{
-    // TODO: 支持 STARTTLS 风格的运行时 TLS 升级（drogon 当前未使用）
-}
-
-void TcpConnection::forwardToTLSBuffer(MsgBuffer * /*buffer*/)
-{
-    // TODO: 与 startEncryption 配套（drogon 当前未使用）
-}
-
-
 void TcpConnection::send(const char *msg, size_t len)
 {
     std::shared_ptr<toolkit::BufferRaw> buffer = nullptr;
@@ -164,11 +150,10 @@ void TcpConnection::send(const std::shared_ptr<toolkit::Buffer> &buffer) {
         return;
     auto h = helper_.lock();
     if (!h) {
-        fireCloseInLoop(SockException(Err_eof, "send failed"));
+        fireClose(SockException(Err_eof, "send failed"));
         return;  // 传输层已销毁，丢弃
     }
 
-    size_t sz = buffer->size();
     if (0 > h->send(std::move(buffer)))
     {
         // socket 已关闭
@@ -176,12 +161,6 @@ void TcpConnection::send(const std::shared_ptr<toolkit::Buffer> &buffer) {
         return;
     }
     lastActivityTick_.resetTime();
-
-    // 高水位（best-effort）
-    if (highWaterMarkCallback_ && highWaterMark_ > buffer->size())
-    {
-        highWaterMarkCallback_(shared_from_this(), sz);
-    }
 }
 
 void TcpConnection::sendFile(const char *fileName,
@@ -274,19 +253,6 @@ AsyncStreamPtr TcpConnection::sendAsyncStream(bool disableKickoff)
 // ---------------------------------------------------------------------------
 // 地址 / 状态 / 配置
 // ---------------------------------------------------------------------------
-void TcpConnection::setHighWaterMarkCallback(const HighWaterMarkCallback &cb,
-                                             size_t markLen)
-{
-    highWaterMarkCallback_ = cb;
-    highWaterMark_ = markLen;
-}
-
-void TcpConnection::setTcpNoDelay(bool on)
-{
-    if (sock_)
-        SockUtil::setNoDelay(sock_->rawFD(), on);
-}
-
 void TcpConnection::shutdown()
 {
     if (auto helper = helper_.lock()) {
@@ -297,11 +263,6 @@ void TcpConnection::shutdown()
 void TcpConnection::forceClose()
 {
     shutdown();
-}
-
-MsgBuffer *TcpConnection::getRecvBuffer()
-{
-    return &readBuffer_;
 }
 
 size_t TcpConnection::bytesSent() const
@@ -363,12 +324,34 @@ void TcpConnection::handleRecv(const Buffer::Ptr &buf)
         return;
     lastActivityTick_.resetTime();
 
-    readBuffer_.append(buf->data(), buf->size());
-    if (recvMsgCallback_)
-        recvMsgCallback_(shared_from_this(), &readBuffer_);
+    if (readBuffer_.readableBytes() == 0)
+    {
+        // fresh：以零拷贝视图直接解析 buf（主路径；body 阶段全程零拷贝，
+        // 消除原 Buffer::Ptr->readBuffer_ 的入站拷贝回归）
+        ParseCursor cursor(buf->data(), buf->size());
+        if (recvMsgCallback_)
+            recvMsgCallback_(shared_from_this(), &cursor);
+        // 不完整尾部落地 leftover（仅 header 行跨 recv 截断时偶发；
+        // body 阶段消费完即 cursor==size，不触发）
+        if (cursor.consumed() < buf->size())
+            readBuffer_.append(buf->data() + cursor.consumed(),
+                               buf->size() - cursor.consumed());
+    }
+    else
+    {
+        // leftover：先拼接新数据，再以 leftover 为连续基底解析
+        readBuffer_.append(buf->data(), buf->size());
+        ParseCursor cursor(readBuffer_.peek(), readBuffer_.readableBytes());
+        if (recvMsgCallback_)
+            recvMsgCallback_(shared_from_this(), &cursor);
+        if (cursor.consumed() > 0)
+            readBuffer_.retrieve(cursor.consumed());
+        if (readBuffer_.readableBytes() == 0)
+            readBuffer_.retrieveAll();  // 排空则收缩，回 fresh
+    }
 }
 
-void TcpConnection::fireCloseInLoop(const SockException &ex)
+void TcpConnection::fireClose(const SockException &ex)
 {
     bool expected = false;
     if (!closed_.compare_exchange_strong(expected, true))
@@ -383,12 +366,11 @@ void TcpConnection::fireCloseInLoop(const SockException &ex)
 
 void TcpConnection::handleClose(const SockException &ex)
 {
-    fireCloseInLoop(ex);
+    fireClose(ex);
 }
 
 void TcpConnection::handleWriteComplete()
 {
-    highWaterMarkFired_ = false;
     if (pendingProducer_)
     {
         return;
@@ -412,7 +394,7 @@ void TcpConnection::handleManagerTick()
         if (auto conn = helper_.lock()) {
             conn->safeShutdown(SockException(Err_shutdown, "idle kickoff"));
         } else {
-            fireCloseInLoop(SockException(Err_shutdown, "idle kickoff"));
+            fireClose(SockException(Err_shutdown, "idle kickoff"));
         }
     }
 }

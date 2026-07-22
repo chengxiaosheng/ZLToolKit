@@ -118,7 +118,7 @@ void TcpClient::onError(const SockException &ex)
     }
     if (conn)
     {
-        // handleClose -> fireCloseInLoop -> closeCallback_(removeConnection)
+        // handleClose -> fireClose -> closeCallback_(removeConnection)
         conn->handleClose(ex);
     }
     if (retry_ && connect_)

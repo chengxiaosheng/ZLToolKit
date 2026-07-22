@@ -44,23 +44,22 @@ using SSLContextPtr = std::shared_ptr<SSLContext>;
  * @brief This class represents a TCP connection.
  *
  * 薄委托具体类：持 weak_ptr<toolkit::SocketHelper>（服务端为 HttpSession，
- * 客户端为 HttpClientConn）+ shared_ptr<toolkit::Socket>。send 直接走 Socket
- * 自带的安全队列；sendFile/sendStream/sendAsyncStream 经 Socket::onFlush
- * 分块拉取。无 BufferNode 写队列。
+ * 客户端为 HttpClientConn）。send 直接走 Socket 自带的安全队列；
+ * sendFile/sendStream/sendAsyncStream 经 Socket::onFlush 分块拉取。无 BufferNode
+ * 写队列。loop_ 在 set_session 中经 helper->getPoller() 权威赋值（= socket 所在
+ * poller），不依赖构造期全局 poller 选择。
  */
 class ZLTOOLKIT_EXPORT TcpConnection
     : public std::enable_shared_from_this<TcpConnection>
 {
   public:
-    TcpConnection() : loop_(toolkit::EventPollerPool::Instance().getPoller()) {
-
-    }
+    TcpConnection() = default;
     ~TcpConnection();
 
     /**
      * @brief 绑定传输层（toolkit::Session 或 toolkit::TcpClient，均为
      * SocketHelper 派生）。构造后、connectEstablished() 前调用一次。
-     * 持 weak_ptr 破环；Socket 强引用以便 helper 死后仍可读地址/字节。
+     * 持 weak_ptr 破环；loop_ 在此权威取 socket 所属 poller。
      */
     template <typename SessionType>
     void set_session(const std::shared_ptr<SessionType> &session)
@@ -69,6 +68,7 @@ class ZLTOOLKIT_EXPORT TcpConnection
             std::static_pointer_cast<toolkit::SocketHelper>(session);
 
         helper_ = helper;
+        loop_ = helper->getPoller();
 
         if (auto sock = helper->getSock())
         {
@@ -122,10 +122,6 @@ class ZLTOOLKIT_EXPORT TcpConnection
     bool connected() const { return connected_; }
     bool disconnected() const { return !connected_; }
 
-    void setHighWaterMarkCallback(const HighWaterMarkCallback &cb,
-                                  size_t markLen);
-    void setTcpNoDelay(bool on);
-
     /// @brief Shutdown the writing direction (half-close).
     void shutdown();
     /// @brief Close the connection forcefully.
@@ -156,35 +152,8 @@ class ZLTOOLKIT_EXPORT TcpConnection
     size_t bytesSent() const;
     size_t bytesReceived() const;
     bool isSSLConnection() const;
-    MsgBuffer *getRecvBuffer();
     CertificatePtr peerCertificate() const;
     std::string sniName() const;
-
-    void startEncryption(TLSPolicyPtr policy,
-                         bool isServer,
-                         std::function<void(const TcpConnectionPtr &)>
-                             upgradeCallback = nullptr);
-    [[deprecated("Use startEncryption(TLSPolicyPtr) instead")]] void
-    startClientEncryption(
-        std::function<void(const TcpConnectionPtr &)> &&callback,
-        bool useOldTLS = false,
-        bool validateCert = true,
-        const std::string &hostname = "",
-        const std::vector<std::pair<std::string, std::string>> &sslConfCmds =
-            {})
-    {
-        auto policy = TLSPolicy::defaultClientPolicy();
-        policy->setUseOldTLS(useOldTLS)
-            .setValidate(validateCert)
-            .setHostname(hostname)
-            .setConfCmds(sslConfCmds);
-        startEncryption(std::move(policy), false, std::move(callback));
-    }
-
-    void setValidationPolicy(TLSPolicy &&policy)
-    {
-        tlsPolicy_ = std::move(policy);
-    }
 
     // ---- callback setters ----
     void setRecvMsgCallback(const RecvMessageCallback &cb)
@@ -235,7 +204,6 @@ class ZLTOOLKIT_EXPORT TcpConnection
     void enableKickingOff(size_t timeout,
                           const std::shared_ptr<TimingWheel> &timingWheel =
                               nullptr);
-    void forwardToTLSBuffer(MsgBuffer *buffer);
 
     // ---- 由传输层转发 ----
     void handleRecv(const toolkit::Buffer::Ptr &buf);
@@ -247,24 +215,16 @@ class ZLTOOLKIT_EXPORT TcpConnection
     // 锁 helper_ 返回 SSL_Box（可能为 nullptr）
     toolkit::SSL_Box *sslBox() const;
 
-    // 触发关闭流程（poller 线程）
-    void fireCloseInLoop(const toolkit::SockException &ex);
+    // 触发关闭流程（在当前 poller 线程内联执行；命名沿用旧称，非投递 loop）
+    void fireClose(const toolkit::SockException &ex);
 
     std::weak_ptr<toolkit::SocketHelper> helper_;
-    std::shared_ptr<toolkit::Socket> sock_;
     std::shared_ptr<toolkit::EventPoller> loop_;
     InetAddress localAddr_;
     InetAddress peerAddr_;
     trantor::MsgBuffer readBuffer_;
     std::atomic_bool connected_{false};
     std::atomic_bool closed_{false};
-
-    // size_t bytesSent_{0};
-    // size_t bytesReceived_{0};
-
-    // high water mark
-    size_t highWaterMark_{0};
-    bool highWaterMarkFired_{false};
 
     // idle kickoff
     size_t idleTimeout_{60 * 1000};
@@ -282,9 +242,7 @@ class ZLTOOLKIT_EXPORT TcpConnection
     ConnectionCallback connectionCallback_;
     CloseCallback closeCallback_;
     WriteCompleteCallback writeCompleteCallback_;
-    HighWaterMarkCallback highWaterMarkCallback_;
     SSLErrorCallback sslErrorCallback_;
-    TLSPolicy tlsPolicy_;
 
   private:
     std::shared_ptr<void> contextPtr_;
