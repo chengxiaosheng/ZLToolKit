@@ -63,7 +63,6 @@ public:
     MD5& finalize();
     std::string hexdigest() const;
     std::string rawdigest() const;
-    friend std::ostream& operator<<(std::ostream&, MD5 md5);
 private:
     void init();
     typedef uint8_t uint1; //  8bit
