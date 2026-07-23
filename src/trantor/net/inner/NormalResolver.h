@@ -16,7 +16,7 @@ namespace trantor
 {
 constexpr size_t kResolveBufferLength{16 * 1024};
 class NormalResolver : public Resolver,
-                       public NonCopyable,
+                       public toolkit::noncopyable,
                        public std::enable_shared_from_this<NormalResolver>
 {
   public:
