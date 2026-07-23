@@ -13,7 +13,6 @@
 #include "Util/SSLBox.h"
 #include "Network/TcpServer.h"
 #include "Network/TcpClient.h"
-#include "Session.h"
 #include "trantor/net/TLSPolicy.h"
 
 using namespace std;
