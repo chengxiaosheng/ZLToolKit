@@ -53,9 +53,6 @@ public:
         // Periodically manage the object, such as session timeout check
         // DebugL;
     }
-
-private:
-    uint32_t _nTick = 0;
 };
 
 //通过模板全特化实现对指定会话拥塞参数的调整

@@ -106,7 +106,7 @@ int main() {
     while (tick <= tick_limit) {
         auto buf = BufferRaw::create(4 * msg_len);
         buf->setSize(4 * msg_len);
-        for (int i = 0; i < msg_len; i++) {
+        for (size_t i = 0; i < msg_len; i++) {
             Byte::Set4Bytes((uint8_t*)buf->data(), 4 * i, tick);
         }
         // TraceL << hexdump(buf->data(), buf->size());
