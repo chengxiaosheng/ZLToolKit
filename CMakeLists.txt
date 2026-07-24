@@ -224,7 +224,7 @@ set(util_public_header
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Util/RingBuffer.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Util/SHA1.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Util/SpeedStatistic.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/Util/SSLBOX.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/Util/SSLBox.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Util/SSLUtil.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Util/TimeTicker.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Util/strptime_win.h
@@ -294,6 +294,16 @@ target_link_libraries(${PROJECT_NAME} PUBLIC Threads::Threads)
 find_package(OpenSSL 1.1)
 if (OpenSSL_FOUND)
     target_link_libraries(${PROJECT_NAME} PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+    if (WIN32)
+        # Statically-linked libcrypto (e.g. Conan's openssl/1.1.1t) bundles the
+        # CAPI engine (e_capi.obj), which calls the Windows certificate-store
+        # API (CertOpenStore, CertFindCertificateInStore, ...). Those symbols
+        # live in crypt32, so ZLToolKit.dll / the final static-link target must
+        # link it. PRIVATE: needed to resolve OpenSSL's own objects, not part of
+        # ZLToolKit's public interface (for a static ZLToolKit this still
+        # propagates link-only to consumers).
+        target_link_libraries(${PROJECT_NAME} PRIVATE crypt32)
+    endif ()
     target_compile_definitions(${PROJECT_NAME} PUBLIC ENABLE_OPENSSL=1)
     target_compile_definitions(${PROJECT_NAME} PUBLIC USE_OPENSSL=1)
     target_compile_definitions(${PROJECT_NAME} PUBLIC TRANTOR_TLS_PROVIDER=OpenSSL)
