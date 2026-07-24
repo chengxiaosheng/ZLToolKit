@@ -324,7 +324,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES EXPORT_NAME ZLToolKit)
 target_sources(${PROJECT_NAME} PRIVATE ${ZLToolKit_SOURCES})
 
 source_group(
-        "Public API" FILES ${CMAKE_CURRENT_BINARY_DIR}/exports/exports.h
+        "Public API" FILES ${CMAKE_CURRENT_BINARY_DIR}/exports/toolkit/exports.h
         ${network_public_header}
         ${poller_public_header}
         ${thread_public_header}
@@ -356,7 +356,6 @@ install(TARGETS ${PROJECT_NAME}
         ARCHIVE DESTINATION "${INSTALL_LIB_DIR}" COMPONENT lib
         LIBRARY DESTINATION "${INSTALL_LIB_DIR}" COMPONENT lib
 )
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/exports/exports.h DESTINATION ${CMAKE_INSTALL_PREFIX}/include/toolkit)
 install(FILES ${network_public_header} DESTINATION ${CMAKE_INSTALL_PREFIX}/include/toolkit/Network)
 install(FILES ${poller_public_header} DESTINATION ${CMAKE_INSTALL_PREFIX}/include/toolkit/Poller)
 install(FILES ${thread_public_header} DESTINATION ${CMAKE_INSTALL_PREFIX}/include/toolkit/Thread)
