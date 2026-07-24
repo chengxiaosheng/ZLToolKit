@@ -31,7 +31,7 @@ EventPoller::Ptr WorkThreadPool::operator[](size_t index) const noexcept {
 WorkThreadPool::WorkThreadPool() {
     //最低优先级  [AUTO-TRANSLATED:cd1f0dbc]
     //Lowest priority
-    addPoller("work poller", s_pool_size, ThreadPool::PRIORITY_LOWEST, false, s_enable_cpu_affinity);
+    addPoller("work poller", s_pool_size, ThreadPool::PRIORITY_LOWEST, true, s_enable_cpu_affinity);
 }
 
 void WorkThreadPool::setPoolSize(size_t size) {
