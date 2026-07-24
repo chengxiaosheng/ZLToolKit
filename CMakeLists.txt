@@ -14,6 +14,23 @@ set(ZLToolKit_PATCH_VERSION 19)
 set(ZLToolKit_VERSION ${ZLToolKit_MAJOR_VERSION}.${ZLToolKit_MINOR_VERSION}.${ZLToolKit_PATCH_VERSION})
 
 include(GNUInstallDirs)
+
+# Installation directories. When ZLToolKit is built as a subdirectory of a
+# parent project (e.g. drogon), the parent already provides INSTALL_BIN_DIR /
+# INSTALL_LIB_DIR / INSTALL_INCLUDE_DIR as cache entries and we reuse them so
+# both projects share the same layout. When built standalone these are unset,
+# so fall back to the GNUInstallDirs defaults -- otherwise install(TARGETS)
+# below gets empty ARCHIVE/LIBRARY destinations and fails with
+# "install TARGETS given no ARCHIVE DESTINATION".
+if(NOT DEFINED INSTALL_BIN_DIR)
+    set(INSTALL_BIN_DIR ${CMAKE_INSTALL_BINDIR} CACHE PATH "Installation directory for binaries")
+endif()
+if(NOT DEFINED INSTALL_LIB_DIR)
+    set(INSTALL_LIB_DIR ${CMAKE_INSTALL_LIBDIR} CACHE PATH "Installation directory for libraries")
+endif()
+if(NOT DEFINED INSTALL_INCLUDE_DIR)
+    set(INSTALL_INCLUDE_DIR ${CMAKE_INSTALL_INCLUDEDIR} CACHE PATH "Installation directory for headers")
+endif()
 include(CheckStructHasMember)
 include(CheckSymbolExists)
 include(GenerateExportHeader)
@@ -393,7 +410,6 @@ write_basic_package_version_file(
 # Install the TrantorConfig.cmake and TrantorConfigVersion.cmake
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/ZLToolKitConfig.cmake"
         "${CMAKE_CURRENT_BINARY_DIR}/ZLToolKitConfigVersion.cmake"
-        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Findc-ares.cmake"
         DESTINATION "${INSTALL_ZLToolKit_CMAKE_DIR}"
         COMPONENT dev
 )
