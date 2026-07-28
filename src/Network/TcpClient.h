@@ -258,7 +258,7 @@ public:
      * 手动设置 TLS 策略 (必须在 startConnect 之前调用)
      * @param policy TLS策略
      */
-    void setTLSPolicy(trantor::TLSPolicyPtr policy) {
+    void setTLSPolicy(trantor::TLSPolicyPtr policy) override {
         _user_policy = std::move(policy);
         _tls_requested = true;
     }

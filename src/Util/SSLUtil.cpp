@@ -440,7 +440,13 @@ std::shared_ptr<SSL_CTX> SSLUtil::makeSSLContext(const trantor::TLSPolicy &polic
     }
 
     // Configure TLS version options
-    unsigned long sslOptions = SSL_OP_ALL | SSL_OP_NO_COMPRESSION;
+    // 与 SSL_Initor::setupCtx 保持一致：禁用会话缓存与重协商，避免多线程（多 poller）
+    // 共享同一 SSL_CTX 时并发握手竞态 session cache 导致状态损坏。
+    unsigned long sslOptions = SSL_OP_ALL | SSL_OP_NO_COMPRESSION
+                               | SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION;
+#ifdef SSL_OP_NO_RENEGOTIATION
+    sslOptions |= SSL_OP_NO_RENEGOTIATION;
+#endif
 
 #ifdef SSL_OP_NO_SSLv2
     sslOptions |= SSL_OP_NO_SSLv2;
@@ -460,6 +466,12 @@ std::shared_ptr<SSL_CTX> SSLUtil::makeSSLContext(const trantor::TLSPolicy &polic
     }
 
     SSL_CTX_set_options(ctx, sslOptions);
+
+    // 与 SSL_Initor::setupCtx 一致：禁用会话缓存，使该 ctx 可被多线程安全共享
+    // （TLSSessionFactory 会按 host:port 缓存并复用 ctx）。否则默认
+    // SSL_SESS_CACHE_SERVER 下，多 poller 并发握手会竞态 ctx 的 session cache。
+    SSL_CTX_set_mode(ctx, SSL_MODE_AUTO_RETRY);
+    SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_OFF);
 
     // Configure certificate validation
     if (policy.getValidate()) {

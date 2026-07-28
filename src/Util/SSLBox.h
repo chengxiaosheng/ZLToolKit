@@ -67,6 +67,30 @@ public:
                          bool is_file = true, bool is_default = true);
 
     /**
+     * 从分立的证书文件和私钥文件中加载公钥和私钥
+     * 当证书与私钥分别位于两个文件（drogon 等框架的常见用法）时使用本重载；
+     * 若二者位于同一文件，请使用单参数版本的 loadCertificate。
+     * @param cert 证书（pem 或 p12）文件路径或内容字符串
+     * @param key 私钥（pem 或 p12）文件路径或内容字符串
+     * @param server_mode 是否为服务器模式
+     * @param password 私钥加密密码
+     * @param is_file 参数 cert/key 是否为文件路径
+     * @param is_default 是否为默认证书
+     * Load public and private keys from separate certificate and private key
+     * sources. Use this overload when the certificate and private key reside
+     * in two different files (as commonly used by frameworks such as drogon);
+     * if they are in the same source, use the single-argument loadCertificate.
+     * @param cert Certificate (pem or p12) file path or content string
+     * @param key Private key (pem or p12) file path or content string
+     * @param server_mode Whether it is in server mode
+     * @param password Private key encryption password
+     * @param is_file Whether cert/key are file paths
+     * @param is_default Whether it is the default certificate
+     */
+    bool loadCertificate(const std::string &cert, const std::string &key, bool server_mode = true, const std::string &password = "",
+                         bool is_file = true, bool is_default = true);
+
+    /**
      * 是否忽略无效的证书
      * 默认忽略，强烈建议不要忽略！
      * @param ignore 标记
@@ -218,7 +242,7 @@ public:
      * @param server_mode true=服务器模式, false=客户端模式
      * @param buff_size 缓冲区大小
      */
-    SSL_Box(std::shared_ptr<SSL_CTX> ctx, bool server_mode, int buff_size = 32 * 1024);
+    SSL_Box(const std::shared_ptr<SSL_CTX>& ctx, bool server_mode, int buff_size = 32 * 1024);
 
     ~SSL_Box();
 

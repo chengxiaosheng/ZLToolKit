@@ -194,8 +194,6 @@ set(ZLToolKit_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/src/trantor/utils/Date.cc
         ${CMAKE_CURRENT_SOURCE_DIR}/src/trantor/utils/MsgBuffer.cc
         ${CMAKE_CURRENT_SOURCE_DIR}/src/trantor/utils/Utilities.cc
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/trantor/net/inner/AsyncStreamBufferNode.cc
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/trantor/net/inner/MemBufferNode.cc
 #        ${CMAKE_CURRENT_SOURCE_DIR}/src/trantor/utils/bcypt/bcrypt.cpp
 #        ${CMAKE_CURRENT_SOURCE_DIR}/src/trantor/utils/bcypt/blowfish.cpp
 #        ${CMAKE_CURRENT_SOURCE_DIR}/src/trantor/utils/crypto/auth.cc
@@ -267,7 +265,6 @@ set(trantor_private_header)
 
 if (IOS)
     list(APPEND ZLToolKit_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/Network/Socket_ios.mm)
-    list(APPEND ZLToolKit_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/trantor/net/inner/FileBufferNodeUnix.cc)
 
 elseif (WIN32)
     target_compile_definitions(${PROJECT_NAME} PUBLIC -DHAS_EPOLL=1)
@@ -280,12 +277,8 @@ elseif (WIN32)
             ${CMAKE_CURRENT_SOURCE_DIR}/src/win32/tailor.h
             ${CMAKE_CURRENT_SOURCE_DIR}/src/win32/wepoll.h
     )
-    list(APPEND ZLToolKit_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/trantor/net/inner/FileBufferNodeWin.cc)
     list(APPEND ZLToolKit_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/trantor/utils/WindowsSupport.cc)
 
-
-else ()
-    list(APPEND ZLToolKit_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/trantor/net/inner/FileBufferNodeUnix.cc)
 endif ()
 
 find_package(c-ares)
@@ -342,6 +335,23 @@ else ()
     )
     target_compile_definitions(${PROJECT_NAME} PUBLIC TRANTOR_TLS_PROVIDER=None)
 endif ()
+
+# ---- mio: header-only cross-platform mmap (zero-copy sendFile in TcpConnection) ----
+# Configure-time fetch via FetchContent; provides the `mio::mio` INTERFACE target
+# (include dir + WIN32_LEAN_AND_MEAN/NOMINMAX on Windows). Linked PRIVATE: mio is
+# only consumed by TcpConnection.cc, never exposed in ZLToolKit's public headers.
+include(FetchContent)
+FetchContent_Declare(
+    mio
+    GIT_REPOSITORY https://github.com/vimpunk/mio.git
+    GIT_TAG        master
+    GIT_SHALLOW    TRUE
+)
+# As a subproject mio defaults to installing itself and building tests; disable both.
+set(mio.installation OFF CACHE INTERNAL "Do not install the mio subproject" "")
+set(mio.tests         OFF CACHE INTERNAL "Do not build mio tests" "")
+FetchContent_MakeAvailable(mio)
+target_link_libraries(${PROJECT_NAME} PRIVATE mio::mio)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD_REQUIRED ON)

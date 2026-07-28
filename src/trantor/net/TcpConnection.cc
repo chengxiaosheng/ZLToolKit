@@ -9,7 +9,6 @@
 
 #include <trantor/net/TcpConnection.h>
 
-#include "inner/BufferNode.h"
 #include "utils/Utilities.h"
 
 #include <Network/Buffer.h>      // BufferRaw, BufferString, BufferOffset
@@ -18,6 +17,7 @@
 #include <Util/logger.h>
 #include <Util/util.h>
 #include <trantor/net/ParseCursor.h>
+#include <mio/mmap.hpp>           // mio::mmap_source - zero-copy sendFile
 
 #include <atomic>
 #include <chrono>
@@ -71,6 +71,49 @@ public:
 private:
     std::function<bool(std::shared_ptr<toolkit::Buffer>)> callback_;
 };
+
+// 基于 mio + BufferOffset 的零拷贝 sendFile：将文件切片 mmap 后直接交给
+// self.send()--由当前连接自动决定后续路径：非 SSL 经 Socket 队列以 sendmsg/
+// WSASend 直读 page cache（零拷贝）；SSL 经 SocketHelper::send 虚函数派发到
+// SSL_Box::onSend 加密后再入队。故此处无需关心连接是否 SSL。
+//
+// 路径归一化：toNativePath 把任意 char/wchar_t 路径转为平台原生串
+// （POSIX: std::string，Windows: std::wstring），mio 在两端均可接收
+// （POSIX 仅吃 char*，Windows 经 CreateFileW 吃 wchar_t*）。这样两个 sendFile
+// 重载都能直调本模板，无需平台宏互转。mio 内部处理 offset 页对齐与句柄生命周期
+// （POSIX: mmap/munmap，Windows: CreateFileMapping/MapViewOfFile）。
+// 模板按 PathChar 实例化，但 mio 调用的 token 恒为平台原生类型，故另一字符类型
+// 的 mio 重载不会在当前平台被实例化（不会触发编译错误）。
+namespace {
+template <typename PathChar>
+void sendFileMmap(TcpConnection &self,
+                  const PathChar *fileName,
+                  long long offset,
+                  long long length)
+{
+    std::error_code ec;
+    auto native = utils::toNativePath(std::basic_string<PathChar>(fileName));
+    mio::mmap_source mmap = (length <= 0)
+        ? mio::make_mmap_source(native,
+                                static_cast<size_t>(offset),
+                                mio::map_entire_file, ec)
+        : mio::make_mmap_source(native,
+                                static_cast<size_t>(offset),
+                                static_cast<size_t>(length), ec);
+    if (ec)
+    {
+        ErrorL << fileName << " sendFile mmap error: " << ec.message();
+        return;
+    }
+    if (!mmap.is_mapped() || mmap.size() == 0)
+        return;  // 空切片，无需发送
+    // BufferOffset<mio::mmap_source> 即一个 toolkit::Buffer：data()=mmap 基址，
+    // size()=切片长度；mio 按 value 持有，shared_ptr 入队直至发送完毕再 munmap。
+    std::shared_ptr<toolkit::Buffer> buffer =
+        std::make_shared<toolkit::BufferOffset<mio::mmap_source>>(std::move(mmap));
+    self.send(buffer);
+}
+}  // namespace
 
 TcpConnection::~TcpConnection() = default;
 
@@ -168,19 +211,8 @@ void TcpConnection::sendFile(const char *fileName,
                              long long length)
 {
     assert(fileName);
-#ifdef _WIN32
-    sendFile(utils::toWidePath(fileName).c_str(), offset, length);
-#else   // _WIN32
-    auto fileNode = BufferNode::newFileBufferNode(fileName, offset, length);
-
-    if (!fileNode->available())
-    {
-        ErrorL << fileName << " open error";
-        return;
-    }
-
-    sendFile(std::move(fileNode));
-#endif  // _WIN32
+    // 零拷贝：mio mmap + BufferOffset；SSL/非 SSL 由 self.send() 经传输层自动处理
+    sendFileMmap(*this, fileName, offset, length);
 }
 
 void TcpConnection::sendFile(const wchar_t *fileName,
@@ -188,25 +220,8 @@ void TcpConnection::sendFile(const wchar_t *fileName,
                              long long length)
 {
     assert(fileName);
-#ifndef _WIN32
-    sendFile(utils::toNativePath(fileName).c_str(), offset, length);
-#else
-    auto fileNode = BufferNode::newFileBufferNode(fileName, offset, length);
-    if (!fileNode->available())
-    {
-        ErrorL << fileName << " open error";
-        return;
-    }
-    sendFile(std::move(fileNode));
-#endif  // _WIN32
-}
-
-
-void TcpConnection::sendFile(std::shared_ptr<BufferNode> &&fileNode) {
-    assert(fileNode->isFile() && fileNode->remainingBytes() > 0);
-
-    auto buffer = std::make_shared<toolkit::BufferOffset<std::shared_ptr<BufferNode>>>(std::move(fileNode));
-    this->send(std::move(buffer));
+    // 零拷贝：mio mmap + BufferOffset；路径在 sendFileMmap 内归一化为平台原生串
+    sendFileMmap(*this, fileName, offset, length);
 }
 
 void TcpConnection::sendStream(

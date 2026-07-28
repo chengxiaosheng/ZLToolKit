@@ -34,7 +34,6 @@
 
 namespace trantor
 {
-class BufferNode;
 class TimingWheel;
 
 struct SSLContext;
@@ -45,9 +44,9 @@ using SSLContextPtr = std::shared_ptr<SSLContext>;
  *
  * 薄委托具体类：持 weak_ptr<toolkit::SocketHelper>（服务端为 HttpSession，
  * 客户端为 HttpClientConn）。send 直接走 Socket 自带的安全队列；
- * sendFile/sendStream/sendAsyncStream 经 Socket::onFlush 分块拉取。无 BufferNode
- * 写队列。loop_ 在 set_session 中经 helper->getPoller() 权威赋值（= socket 所在
- * poller），不依赖构造期全局 poller 选择。
+ * sendFile 基于 mio mmap + BufferOffset 零拷贝入队；sendStream/sendAsyncStream
+ * 经 Socket::onFlush 分块拉取。loop_ 在 set_session 中经 helper->getPoller()
+ * 权威赋值（= socket 所在 poller），不依赖构造期全局 poller 选择。
  */
 class ZLTOOLKIT_EXPORT TcpConnection
     : public std::enable_shared_from_this<TcpConnection>
@@ -102,7 +101,6 @@ class ZLTOOLKIT_EXPORT TcpConnection
     void send(const MsgBuffer &buffer);
     void send(MsgBuffer &&buffer);
     void send(const std::shared_ptr<toolkit::Buffer> &buffer);
-    void sendFile(std::shared_ptr<BufferNode> &&fileNode);
 
     /// @brief Send a file (UTF-8 path).
     void sendFile(const char *fileName,

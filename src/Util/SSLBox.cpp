@@ -109,6 +109,21 @@ bool SSL_Initor::loadCertificate(const string &pem_or_p12, bool server_mode, con
     return true;
 }
 
+bool SSL_Initor::loadCertificate(const string &cert, const string &key, bool server_mode, const string &password, bool is_file, bool is_default) {
+    auto cers = SSLUtil::loadPublicKey(cert, password, is_file);
+    auto evp_key = SSLUtil::loadPrivateKey(key, password, is_file);
+    auto ssl_ctx = SSLUtil::makeSSLContext(cers, evp_key, server_mode, true);
+    if (!ssl_ctx) {
+        return false;
+    }
+    for (auto &cer : cers) {
+        auto server_name = SSLUtil::getServerName(cer.get());
+        setContext(server_name, ssl_ctx, server_mode, is_default);
+        break;
+    }
+    return true;
+}
+
 int SSL_Initor::findCertificate(SSL *ssl, int *, void *arg) {
 #if !defined(ENABLE_OPENSSL) || !defined(SSL_ENABLE_SNI)
     return 0;
@@ -340,20 +355,21 @@ SSL_Box::SSL_Box(bool server_mode, bool enable, int buff_size)
 #endif //defined(ENABLE_OPENSSL)
 }
 
-SSL_Box::SSL_Box(std::shared_ptr<SSL_CTX> ctx, bool server_mode, int buff_size)
-    : _server_mode(server_mode), _send_handshake(false), _buff_size(buff_size), _custom_ctx(std::move(ctx)) {
+SSL_Box::SSL_Box(const std::shared_ptr<SSL_CTX>& ctx, bool server_mode, int buff_size)
+    : _server_mode(server_mode), _send_handshake(false), _buff_size(buff_size) {
 #if defined(ENABLE_OPENSSL)
     _read_bio = BIO_new(BIO_s_mem());
-    if (_custom_ctx) {
-        initFromCustomCtx();
+    if (ctx) {
+        _ssl = SSLUtil::makeSSL(ctx.get());
+
     } else {
         // 回退到全局方式
         _ssl = SSL_Initor::Instance().makeSSL(server_mode);
-        if (_ssl) {
-            _write_bio = BIO_new(BIO_s_mem());
-            SSL_set_bio(_ssl.get(), _read_bio, _write_bio);
-            _server_mode ? SSL_set_accept_state(_ssl.get()) : SSL_set_connect_state(_ssl.get());
-        }
+    }
+    if (_ssl) {
+        _write_bio = BIO_new(BIO_s_mem());
+        SSL_set_bio(_ssl.get(), _read_bio, _write_bio);
+        _server_mode ? SSL_set_accept_state(_ssl.get()) : SSL_set_connect_state(_ssl.get());
     }
     if (!_ssl) {
         WarnL << "makeSSL failed";
@@ -710,7 +726,8 @@ std::shared_ptr<SSL_CTX> TLSSessionFactory::getServerSSLContext(
     std::lock_guard<std::mutex> lock(_mutex);
     auto key = makeServerKey(listenAddr, port);
 
-    // Check if context already exists
+    // 不缓存/复用 SSL_CTX：多 poller (SO_REUSEPORT) 下共享同一 ctx 会共享私钥，
+    // 并发握手签名竞态损坏 SSL 状态。每次按策略新建 ctx（各自加载独立私钥）。
     auto ctxIt = _serverContexts.find(key);
     if (ctxIt != _serverContexts.end()) {
         return ctxIt->second;

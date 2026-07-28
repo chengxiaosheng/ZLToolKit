@@ -232,7 +232,11 @@ std::string fromWidePath(const std::wstring &wstrPath)
 
 std::string tlsBackend()
 {
-    return TOSTRING(TRANTOR_TLS_PROVIDER);
+#if USE_OPENSSL
+    return "OpenSSL";
+#endif
+    return "None";
+    // return TOSTRING(TRANTOR_TLS_PROVIDER);
 }
 #undef TOSTRING
 #undef STRINGIFY
