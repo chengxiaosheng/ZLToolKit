@@ -57,7 +57,7 @@ class_name &class_name::Instance() { \
 namespace toolkit {
 
 #define StrPrinter ::toolkit::_StrPrinter()
-class ZLTOOLKIT_EXPORT _StrPrinter : public std::string {
+class _StrPrinter : public std::string {
 public:
     _StrPrinter() {}
 

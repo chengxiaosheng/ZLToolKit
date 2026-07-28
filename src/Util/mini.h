@@ -183,7 +183,7 @@ private:
 };
 
 //  handy variant class as key/values
-struct ZLTOOLKIT_EXPORT variant : public std::string {
+struct variant : public std::string {
     template<typename T>
     variant(const T &t) :
             std::string(std::to_string(t)) {
